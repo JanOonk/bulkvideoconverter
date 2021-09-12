@@ -1,2 +1,2 @@
 # Bulk Video Converter
-A shellscript to recursively scan a folder for files to convert/re-encode to different codec/encoder
+A flexible and featured shellscript that recursively scans a folder for files to convert/re-encode to different codec/encoder using ffmpeg.
