@@ -4,7 +4,7 @@ A flexible and featured Bash shellscript that recursively scans a folder for fil
 Tested on Ubuntu 20.04.2 LTS
 
 ## Context
-I am using this script inside a Ubuntu docker container running on my Synology NAS. It daily converts all the MPEG2 recordings made by NextPVR with my HDHomeRun tuner.  
+I am using this script inside a Ubuntu docker container running on my Synology DS720+ NAS (Intel Celeron J4125 4-core CPU + 6GB). It daily converts all the MPEG2 recordings made by NextPVR with my HDHomeRun tuner.  
 I am converting them to `libx264` which is generally about ~7x times smaller and converts at a 2.4x speed.  
 Using `libx265` it's about ~12x times smaller and converts at a 0.7x speed.  
 
