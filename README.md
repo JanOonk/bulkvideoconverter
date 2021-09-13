@@ -1,5 +1,6 @@
 # Bulk Video Converter
-A flexible and featured Bash shellscript that recursively scans a folder for files to convert/re-encode to different codec/encoder using ffmpeg.
+A flexible and featured Bash shellscript that recursively scans a folder for files to convert/re-encode to different codec/encoder using ffmpeg.  
+
 Tested on Ubuntu 20.04.2 LTS
 
 ## Context
@@ -39,3 +40,26 @@ if false it will keep running and restart scanning automatically next day (scrip
 
 `rerunAt="03 00"`  
 if runOnce is false then rerun next day at this time HH MM  
+
+
+## Script parameters
+<pre>
+Syntax is:  
+ convertToMP4 [rootFolder] [filefilter] [encoder]  
+  [rootFolder] root folder from where to start (recursively) to find files (mandatory), for example:  
+    /videos  
+  [filefilter] file filter (mandatory), for example:  
+    *.ts  
+    movie*.mpeg2  
+  [encoder] any supported ffmpeg codec (optionally), for example:  
+    libx264 (default)  
+    libx265  
+
+Supported ffmpeg encoders/codecs can be checked with:  
+  ffmpeg -codecs  
+
+ Examples how to run this script:  
+  convertToMP4.sh /videos *.ts  
+  convertToMP4.sh /videos *.ts libx264  
+  convertToMP4.sh /videos *.ts libx265  
+</pre>  
