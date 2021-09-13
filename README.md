@@ -45,7 +45,7 @@ if `runOnce` is false then rerun next day at this time HH MM
 ## Script parameters
 <pre>
 Syntax is:  
- convertToMP4 [rootFolder] [filefilter] [encoder]  
+ convertVideos [rootFolder] [filefilter] [encoder]  
   [rootFolder] root folder from where to start (recursively) to find files (mandatory), for example:  
     /videos  
   [filefilter] file filter (mandatory), for example:  
@@ -59,7 +59,11 @@ Supported ffmpeg encoders/codecs can be checked with:
   ffmpeg -codecs  
 
  Examples how to run this script:  
-  convertToMP4.sh /videos *.ts  
-  convertToMP4.sh /videos *.ts libx264  
-  convertToMP4.sh /videos *.ts libx265  
+  convertVideos.sh /videos *.ts  
+  convertVideos.sh /videos *.ts libx264  
+  convertVideos.sh /videos *.ts libx265  
 </pre>  
+
+
+`runConvertVideosLogged.sh` is a helper script which calls `convertVideos.sh` with default parameters:  
+Scans /videos folder for *.ts and convert these to MPEG4 (x264) and logs all output to `convertVideos-logfile.txt`.
