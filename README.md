@@ -8,10 +8,12 @@ I am converting them to `libx264` which is generally about ~7x times smaller and
 Using `libx265` it's about ~12x times smaller and converts at a 0.7x speed.  
 
 ## Dependencies
+Packages:  
 `ffmpeg` - used for the actual conversion  
 `ffprobe` - for getting stats like duration of videofile  
-`jq` - for parsing the JSON videofile stats result of `ffprobe`  
 `bc` - for math calculations  
+
+`jq` - for parsing the JSON videofile stats result of `ffprobe` - https://stedolan.github.io/jq/  
 
 ## Script Settings
 `minFileAgeInSeconds=10`  
