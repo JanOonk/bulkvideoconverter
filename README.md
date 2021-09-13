@@ -39,7 +39,7 @@ is it allowed to have multiple instances running of this script (to be safe set 
 if false it will keep running and restart scanning automatically next day (script is never exited)  
 
 `rerunAt="03 00"`  
-if runOnce is false then rerun next day at this time HH MM  
+if `runOnce` is false then rerun next day at this time HH MM  
 
 
 ## Script parameters
