@@ -20,8 +20,10 @@ Packages:
 minimum fileage in seconds for inputfiles (that means how old is the file since last write) to be considered to get converted and for outputfiles to be checked if reconverting is needed  
 
 `maxLengthDifferenceInSeconds=1`  
-`redoConversionWhenInputAndOutputDontMatch=true`  
 how much tolereance between inputfile and outputfile to be a match (means conversion is succesfull)  
+
+`redoConversionWhenInputAndOutputDontMatch=true`  
+Previous converted files which are not completed, got interrupted or failed can be redone when the inputfile and outputfile do not match  
 
 `keepPreviousConversion=true`  
 in some rare cases you can have an outputfile which has the same filename (without extension) as an inputfile, but doesn't have the same contents which is reflected in a different duration with this setting you can preserve these files the previous outputfile will have a suffix "-prev-v#" added  
