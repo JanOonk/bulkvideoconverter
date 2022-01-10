@@ -1,11 +1,32 @@
 #!/bin/bash
 
+# Limitations
+# -Once happened that .mp4 conversion didn't succeed (.ts recording was visually ok)
+# V Sometimes the .ts recording is corrupt and retrieved length is bogus (happens to all: MediaInfo, ffprobe, Windows, VLC)
+#   This causes endless retrying.
+#    Solution: max retry option
+#
+# V Sometimes the .mp4 recording is more than a few seconds off like 14-15 seconds on a 1u:15m recording. 
+#   If above threshold $maxLengthDifferenceInSeconds than it causes endless retries.
+#    Solution/workaround: use percentage. After analysis of the 6 bogus recordings max. was 0,32%
+
 #SETTINGS
+#full path to ffmpeg (here using Docker environment variable)
+ffmpeg=$JELLYFIN_FFMPEG
+#full path to ffprobe (here using Docker environment variable)
+ffprobe=${JELLYFIN_FFMPEG%/*}/ffprobe
+
 # minimum fileage in seconds for inputfiles to be considered to get converted and for outputfiles to be checked if reconverting is needed
 minFileAgeInSeconds=10
 
+maxRetries=2
+
+# after successfull conversion delete corresponding .xml file which HDHomeRun generates?
+removeVideoXMLFile=true
+
 # how much tolereance between inputfile and outputfile to be a match (means conversion is succesfull)
-maxLengthDifferenceInSeconds=1
+#maxLengthDifferenceInSeconds=1
+maxLengthDifferenceAsPercentage=0.35
 redoConversionWhenInputAndOutputDontMatch=true
 
 # in some rare cases you can have an outputfile which has the same filename (without extension) as an inputfile,
@@ -73,6 +94,7 @@ if [ "$1" = "" ] || [ "$2" = "" ]; then
 	echo "  [encoder] any supported ffmpeg codec (optionally), for example:";
 	echo "    libx264 (default)";
 	echo "    libx265";
+	echo "    hevc_vaapi";
 	echo "";
 	echo " Supported ffmpeg encoders/codecs can be checked with:";
 	echo "  ffmpeg -codecs";
@@ -81,6 +103,7 @@ if [ "$1" = "" ] || [ "$2" = "" ]; then
 	echo "  convertVideos.sh /videos *.ts";
 	echo "  convertVideos.sh /videos *.ts libx264";
 	echo "  convertVideos.sh /videos *.ts libx265";
+	echo "  convertVideos.sh /videos *.ts hevc_vaapi";
 	echo ""
 	
 	exit 1
@@ -100,6 +123,7 @@ while [ true ]
 do
 	readarray -d '' files < <(find "$ROOT" -name "$FILEFILTER" -print0)
 	numFiles=${#files[@]}
+	echo ""
 	echo "[$(date)] : $numFiles inputfile(s) matching $FILEFILTER were found in \"$ROOT\"!"
 	fileNr=0
 	for inputFile in "${files[@]}"; 
@@ -113,7 +137,7 @@ do
 		inputfileAgeInSeconds=$(($(date +%s) - $(date +%s -r "$inputFile")))
 		echo "[$(date)] : File age is $inputfileAgeInSeconds seconds"
 
-		durationInputFile=$(bc <<<`ffprobe -i "$inputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
+		durationInputFile=$(bc <<<`$ffprobe -i "$inputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
 		echo "[$(date)] : Duration inputfile : $durationInputFile seconds"
 
 		if [ $inputfileAgeInSeconds -ge $minFileAgeInSeconds ]; then
@@ -138,12 +162,15 @@ do
 				if [ $outputfileAgeInSeconds -ge $minFileAgeInSeconds ]; then
 					percentage=$(bc <<<"scale=4; $filesizeOutput / $filesizeInput * 100")
 					echo "[$(date)] : Percentage compression of already converted file: $percentage"
-					durationOutputFile=$(bc <<<`ffprobe -i "$outputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
+					durationOutputFile=$(bc <<<`$ffprobe -i "$outputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
 					echo "[$(date)] : Duration outputfile : $durationOutputFile seconds"
 					difference=$(abs_diff $durationInputFile $durationOutputFile)
 					echo "[$(date)] : Difference: $difference seconds"
 					
-					if [ $(bc <<<"$difference < $maxLengthDifferenceInSeconds") -eq 1 ]; then
+					differenceAsPercentage=$(bc <<<"scale=4; $difference / $durationInputFile * 100")
+					echo "[$(date)] : DifferenceAsPercentage: $differenceAsPercentage%"
+					
+					if [ $(bc <<<"$differenceAsPercentage < $maxLengthDifferenceAsPercentage") -eq 1 ]; then
 						echo "[$(date)] : a previous successfull conversion was found which matched qua duration with \"$inputFile\""
 						if [ "$deleteOriginalFiles" = true ]; then
 							rm "$inputFile"
@@ -181,6 +208,16 @@ do
 				echo "[$(date)] : \"$outputFile\" does not exist."
 			fi
 			
+			#check retries
+			if [ "$doConversion" = true ]; then
+				maxOutputFile="${outputFile%.*}-prev-v$maxRetries.mp4"
+				echo "[$(date)] : Testing if $maxOutputFile exist"
+				if [ -f "$maxOutputFile" ]; then
+					doConversion=false
+					echo "[$(date)] : Max. retries reached... skipping file!"
+				fi
+			fi
+			
 			if [ "$doConversion" = true ]; then 
 				filesizeOutput=0
 				echo "[$(date)] : Re-encoding file..."
@@ -189,31 +226,43 @@ do
 				#encoder: libx265 (~12x times smaller and speed=0.7x)
 				
 				#used commandline options ffmpeg explained:
-				# -loglevel = show/log only errors
-				# -i        = use inputFile as input
-				# -y        = overwrite previous file
-				# -c:v      = re-encode video with ENCODER
-				# =pix_fmt  = use yuv420p as pixelformat
-				# -c:a      = copy original audio
-				ffmpeg -loglevel error -i "$inputFile" -y -c:v $ENCODER -pix_fmt yuv420p -c:a copy "$outputFile"
+				# -loglevel   = show/log only errors
+				# -i          = use inputFile as input
+				# -y          = overwrite previous file
+				# -c:v        = re-encode video with ENCODER
+				# =pix_fmt    = use yuv420p as pixelformat
+				# -c:a copy   = copy original audio
+				# -acodec mp3 = convert audio to mp3
+				$($ffmpeg -hwaccel vaapi -hwaccel_output_format vaapi -i "$inputFile" -y -c:v $ENCODER -acodec mp3 "$outputFile" -loglevel error)
 				filesizeOutput=$(stat -c%s "$outputFile")
 				percentage=$(bc <<<"scale=4; $filesizeOutput / $filesizeInput * 100")
 				echo ""
 				echo "[$(date)] : Percentage compression after conversion: $percentage"
 
-				durationOutputFile=$(bc <<<`ffprobe -i "$outputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
+				durationOutputFile=$(bc <<<`$ffprobe -i "$outputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
 				echo "[$(date)] : Duration outputfile : $durationOutputFile seconds"
 				difference=$(abs_diff $durationInputFile $durationOutputFile)
 				echo "[$(date)] : Difference: $difference seconds"
 
-				if [ -f "$outputFile" ] && [ $(bc <<<"$difference < $maxLengthDifferenceInSeconds") -eq 1 ]; then
+				differenceAsPercentage=$(bc <<<"scale=4; $difference / $durationInputFile * 100")
+				echo "[$(date)] : DifferenceAsPercentage: $differenceAsPercentage%"
+
+				if [ -f "$outputFile" ] && [ $(bc <<<"$differenceAsPercentage < $maxLengthDifferenceAsPercentage") -eq 1 ]; then
 					echo "[$(date)] : Conversion succes, inputFile can be deleted"
+					
 					if [ "$deleteOriginalFiles" = true ]; then
 						rm "$inputFile"
 						echo "[$(date)] : Deleted \"$inputFile\""
 					else
 						echo "[$(date)] : Skipped deletion of \"$inputFile\""
 					fi
+					
+					if [ "$removeVideoXMLFile" = true ]; then
+						xmlFile="${inputFile%.*}.xml"
+						rm "$xmlFile"
+						echo "[$(date)] : Deleted \"$xmlFile\""
+					fi
+					
 				else 
 					echo "[$(date)] : Conversion skipped, failed or incomplete"
 				fi
