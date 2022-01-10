@@ -20,8 +20,14 @@ Packages:
 `minFileAgeInSeconds=10`  
 minimum fileage in seconds for inputfiles (that means how old is the file since last write) to be considered to get converted and for outputfiles to be checked if reconverting is needed  
 
-`maxLengthDifferenceInSeconds=1`  
-how much tolereance between inputfile and outputfile to be a match (means conversion is succesfull)  
+`maxRetries=2`  
+how many times to try converting (1 try per cycle)?  
+
+`removeVideoXMLFile=true`  
+after successfull conversion delete corresponding .xml file which HDHomeRun generates?  
+
+`maxLengthDifferenceAsPercentage=0.35`  
+how much tolereance (as percentage) between inputfile and outputfile to be a match (means conversion is succesfull)  
 
 `redoConversionWhenInputAndOutputDontMatch=true`  
 Previous converted files which are not completed, got interrupted or failed can be redone when the inputfile and outputfile do not match  
