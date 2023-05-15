@@ -1,291 +1,463 @@
 #!/bin/bash
 
-# Limitations
-# -Once happened that .mp4 conversion didn't succeed (.ts recording was visually ok)
-# V Sometimes the .ts recording is corrupt and retrieved length is bogus (happens to all: MediaInfo, ffprobe, Windows, VLC)
-#   This causes endless retrying.
-#    Solution: max retry option
+# Requirements/dependencies:
+#  apt-get update
+#  apt-get install bc
 #
-# V Sometimes the .mp4 recording is more than a few seconds off like 14-15 seconds on a 1u:15m recording. 
-#   If above threshold $maxLengthDifferenceInSeconds than it causes endless retries.
-#    Solution/workaround: use percentage. After analysis of the 6 bogus recordings max. was 0,32%
+#  Also `jq` (supplied with this script) and `stat` (standard for most Linux distro's) are used.
+#
+# Limitations
+# -It sometimes happens that an .mp4 conversion doesn't succeed (although .ts recording might seem visually ok). 
+#  Mostly because the .ts recording is (partially) corrupt which can cause the retrieved duration/length to be bogus,
+#   this happens to all: MediaInfo, ffprobe, Windows, VLC
+#  By implementing maxDurationDifferenceAsPercentage and maxRetries this is worked around and preventing endless retries.
+#
+# Todo:
+# X trap ctrl-c (quit, terminate, kill) signals -> works if script is run directly but does not when called from other script (with piping?)
+# X multipleInstancesAllowed only works on same device. Solution is to use lockfile (per host if you want to store PID's). -> 
+#   But what if you do CTRL-C and lockfile is not removed?!
+# X save runs stats in file and load that on start of script -> running multiple instances will give problems updating these stats
 
-#SETTINGS
-#full path to ffmpeg (here using Docker environment variable)
-ffmpeg=$JELLYFIN_FFMPEG
-#full path to ffprobe (here using Docker environment variable)
-ffprobe=${JELLYFIN_FFMPEG%/*}/ffprobe
+defaultSettingsFile="settings.sh"
 
-# minimum fileage in seconds for inputfiles to be considered to get converted and for outputfiles to be checked if reconverting is needed
-minFileAgeInSeconds=10
+source common-functions.sh
 
-maxRetries=2
+includeSourceFile "bootstrap-functions.sh"
 
-# after successfull conversion delete corresponding .xml file which HDHomeRun generates?
-removeVideoXMLFile=true
+#explicitly declare vars used in parsing commandline arguments
+settingsFile=""
+searchDirectories=()
+fileFilters=()
+logFile=""
+encoder=""
+excludeDirectories=()
 
-# how much tolereance between inputfile and outputfile to be a match (means conversion is succesfull)
-#maxLengthDifferenceInSeconds=1
-maxLengthDifferenceAsPercentage=0.35
-redoConversionWhenInputAndOutputDontMatch=true
+# parse commandline arguments (last parameter) and save them in specified variable parameters
+parse_args settingsFile searchDirectories fileFilters logFile encoder excludeDirectories "$@"
+# echo "settingsFile=$settingsFile"
+# echo "searchDirectories=${searchDirectories[@]}"
+# echo "fileFilters=${fileFilters[@]}"
+# echo "logFile=$logFile"
+# echo "encoder=$encoder"
 
-# in some rare cases you can have an outputfile which has the same filename (without extension) as an inputfile,
-# but doesn't have the same contents which is reflected in a different duration
-# with this setting you can preserve these files
-# the previous outputfile will have a suffix "-prev-v#" added
-keepPreviousConversion=true
+usingDefaultSettingsFile=$([ "$settingsFile" = "" ] && echo true || echo false)
 
-# after conversion delete original inputfile
-deleteOriginalFiles=true
+settingsFile=$(get_non_empty_string "$settingsFile" "$defaultSettingsFile")
 
-# is it allowed to have multiple instances running of this script (to be safe set to false)
-multipleInstancesAllowed=false
-
-# if false it will keep running and restart scanning automatically next day (script is never exited)
-runOnce=false
-
-# if runOnce is false then rerun next day at this time HH MM
-rerunAt="03 00"
-
-function wait_till {
-	target="$1.$2"
-	cur=$(date '+%H.%M')
-	while test $target != $cur; do
-		sleep 59
-		cur=$(date '+%H.%M')
-	done
-}
-
-function abs_diff {
-	if [ $(bc <<<"$1 >= $2") -eq 1 ]; then
-		diff="$(echo $1 - $2 | bc)"
-	else
-		diff="$(echo $2 - $1 | bc)"
-	fi
-	
-	echo $diff
-}
-
-echo ""
-echo "[$(date)] : Run starts"
-echo "[$(date)] : scriptname: $0"
-echo "[$(date)] : arguments : $1 $2 $3"
-
-if [ "$multipleInstancesAllowed" = false ] ; then
-	for pid in $(pidof -x $0); do
-		if [ $pid != $$ ]; then
-			echo "[$(date)] : $0 : Process is already running with PID $pid"
-			echo ""
-			exit 1
-		fi
-	done
+if [ ! -f "$settingsFile" ]; then
+  echo "settingsFile file \"$settingsFile\" does NOT exist!"
+  exit 1
 fi
 
-if [ "$1" = "" ] || [ "$2" = "" ]; then
+includeSourceFile "$settingsFile"
 
+logFile=$(get_non_empty_string "$logFile" "$defaultLogFile")
+
+includeSourceFile "app-functions.sh"
+
+if [ "$multipleInstancesAllowed" = false ] && check_if_running; then
+	echo "$0 : Process is already running with PID $$"
 	echo ""
-	echo "Syntax is:"
-	echo " convertVideos [rootFolder] [filefilter] [encoder]";
-	echo "  [rootFolder] root folder from where to start (recursively) to find files (mandatory), for example:";
-	echo "    /videos";
-	echo "  [filefilter] file filter (mandatory), for example:";
-	echo "    *.ts";
-	echo "    movie*.mpeg2";
-	echo "  [encoder] any supported ffmpeg codec (optionally), for example:";
-	echo "    libx264 (default)";
-	echo "    libx265";
-	echo "    hevc_vaapi";
-	echo "";
-	echo " Supported ffmpeg encoders/codecs can be checked with:";
-	echo "  ffmpeg -codecs";
-	echo "";
-	echo " Examples how to run this script:"
-	echo "  convertVideos.sh /videos *.ts";
-	echo "  convertVideos.sh /videos *.ts libx264";
-	echo "  convertVideos.sh /videos *.ts libx265";
-	echo "  convertVideos.sh /videos *.ts hevc_vaapi";
-	echo ""
-	
 	exit 1
-else
-	ROOT=$1
 fi
 
-FILEFILTER=$2
+searchDirectories=$(get_non_empty_string "$searchDirectories" "$defaultSearchFolders")
+fileFilters=$(get_non_empty_string "$fileFilters" "$defaultFileFilters")
+encoder=$(get_non_empty_string "$encoder" "$defaultEncoder")
+excludeDirectories=$(get_non_empty_string "$excludeDirectories" "$defaultExcludedDirectories")
 
-if [ "$3" = "" ]; then
-	ENCODER=libx264
-else
-	ENCODER=$3
+if [ "$searchDirectories" = "" ] || [ "$fileFilters" = "" ] || [ "$encoder" = "" ]; then
+	show_syntax
+	exit 1
 fi
+
+log_message ""
+log_message "---------------------------------------------------------------------------------------------------------"
+log_message "Run starts"
+log_message "Scriptname: $0"
+log_message "PID: $$"
+log_message "Running on host: $(hostname)"
+if [ $# -eq 0 ]; then
+	log_message "No commandline arguments specified, using defaults from \"$settingsFile\""
+else
+	args="$@"
+	log_message "Commandline arguments specified: \"$args\""
+fi
+
+if $usingDefaultSettingsFile; then
+	log_message "No settingsFile file specified, using default settingsFile \"$defaultSettingsFile\""
+else
+	log_message "SettingsFile file specified, using settingsFile \"$settingsFile\""
+fi
+
+#map encoder to hardware
+IFS="_" read -ra parts <<< "$encoder"
+codec=${parts[0]}
+hardware=""
+if [ "${#parts[@]}" -eq 2 ]; then
+	hardware="${parts[1]}"
+	log_message "Using codec $codec and hardware acceleration using $hardware"
+else  
+	log_message "Using codec $codec with no hardware acceleration"
+fi
+
+totalConversionTimeRuns=0
+totalSucceedsRuns=0
+totalRuns=0
+totalTriedConvertingFilesRuns=0
+totalDurationOfSuccessfullConvertedInputFilesRuns=0
+
+inputFilesWithMaxRetries=()
+load_from_file $filenameInputFilesWithMaxRetries inputFilesWithMaxRetries
 
 while [ true ]
 do
-	readarray -d '' files < <(find "$ROOT" -name "$FILEFILTER" -print0)
-	numFiles=${#files[@]}
+	startOfRun=$(date +%s)
+
+	readarray -t inputFiles < <(searchFiles searchDirectories[@] fileFilters[@] excludeDirectories[@])
+	inputFilesLeft=${#inputFiles[@]}
+	totalFilesRun=$inputFilesLeft
 	echo ""
-	echo "[$(date)] : $numFiles inputfile(s) matching $FILEFILTER were found in \"$ROOT\"!"
+	log_message "${#searchDirectories[@]} search folder(s) will be searched"
+	print_array_on_new_lines searchDirectories " "
+	log_message "${#excludeDirectories[@]} folder(s) will be excluded from searching:"
+	print_array_on_new_lines excludeDirectories " "
+	log_message "$totalFilesRun inputfile(s) matching ${fileFilters[@]} were found:"
+	print_array_on_new_lines inputFiles " " true
+
 	fileNr=0
-	for inputFile in "${files[@]}"; 
+	totalSucceedsRun=0
+	totalAlreadyConvertedRun=0
+	totalFailsRun=0
+	totalFilesTooYoungRun=0
+	totalDurationOfSuccessfullConvertedInputFilesRun=0
+	totalConversionTimeRun=0
+	
+	nrOfNewInputFilesWithMaxRetries=0
+	nrOfInputFilesWithAlreadyMaxRetries=0
+	nrOfRetriedFilesWithPreviouslyMaxRetries=0
+	
+	nrOfInputFilesWithMaxRetries=${#inputFilesWithMaxRetries[@]}
+	# echo "nrOfInputFilesWithMaxRetries=$nrOfInputFilesWithMaxRetries"
+	# echo "inputFilesWithMaxRetries="
+	# print_array_on_new_lines inputFilesWithMaxRetries " "
+	
+	if [ $nrOfInputFilesWithMaxRetries -ge 1 ]; then
+		non_existing_files=()	
+		remove_non_existing_files inputFilesWithMaxRetries non_existing_files
+		save_to_file inputFilesWithMaxRetries $filenameInputFilesWithMaxRetries
+
+		log_message "$nrOfInputFilesWithMaxRetries inputfile(s) from previous run(s) had max retries:"
+		log_message " ${#inputFilesWithMaxRetries[@]} existing file(s):"
+		indent="  "
+		print_array_on_new_lines inputFilesWithMaxRetries "$indent"
+		log_message " ${#non_existing_files[@]} removed file(s):"
+		print_array_on_new_lines non_existing_files "$indent"
+	fi
+	
+	maxRunTimeReached=false
+	for inputFile in "${inputFiles[@]}"; 
 	do
-		echo "[$(date)] : ---------------"
+		log_message "---------------"
 		
 		fileNr=$((fileNr+1))
-		echo "[$(date)] : Next inputfile #$fileNr \"$inputFile\""
+		log_message "Next inputfile #$fileNr \"$inputFile\""
 
-		#only consider .ts files which are done by HDHomeRun recorder (that means are old enough)
+		#only consider .ts files of which recording has finished (for example by HDHomeRun) (that means are old enough)
 		inputfileAgeInSeconds=$(($(date +%s) - $(date +%s -r "$inputFile")))
-		echo "[$(date)] : File age is $inputfileAgeInSeconds seconds"
+		log_message " File age is $inputfileAgeInSeconds seconds"
 
 		durationInputFile=$(bc <<<`$ffprobe -i "$inputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
-		echo "[$(date)] : Duration inputfile : $durationInputFile seconds"
+		log_message " Duration is $durationInputFile seconds"
 
 		if [ $inputfileAgeInSeconds -ge $minFileAgeInSeconds ]; then
+			filesizeInput=$(get_filesize_in_bytes "$inputFile")
+			formattedFilesize=$(format_filesize $filesizeInput)
+			log_message " Size is $formattedFilesize"
+
 			#current folder
 			currentFolder="${inputFile%/*}"
 			#remove extension and add .mp4
-			outputFile="${inputFile%.*}.mp4" 
-			filesizeInput=$(stat -c%s "$inputFile")
-			echo "[$(date)] : size is $filesizeInput"
-			#echo "[$(date)] : \"$outputFile\"";
+			outputFile="${inputFile%.*}.mp4"
+
 			doConversion=true;
+			log_message "Outputfile name is \"$outputFile\""
 			if [ -f "$outputFile" ]; then
-				#echo "[$(date)] : \"$outputFile\" exists."
-				
-				filesizeOutput=$(stat -c%s "$outputFile")		
-				echo "[$(date)] : size \"$outputFile\" is $filesizeOutput"
+				filesizeOutput=$(get_filesize_in_bytes "$outputFile")
+				formattedFilesize=$(format_filesize $filesizeOutput)
+				log_message " Size is $formattedFilesize"
 
 				#skip .mp4 files which are not old enough, in case a process is converting/writing to them
 				outputfileAgeInSeconds=$(($(date +%s) - $(date +%s -r "$outputFile")))
-				echo "[$(date)] : File age is $outputfileAgeInSeconds seconds"
+				log_message " File age is $outputfileAgeInSeconds seconds"
 
 				if [ $outputfileAgeInSeconds -ge $minFileAgeInSeconds ]; then
 					percentage=$(bc <<<"scale=4; $filesizeOutput / $filesizeInput * 100")
-					echo "[$(date)] : Percentage compression of already converted file: $percentage"
+					log_message " Percentage compression compared to inputfile is $percentage%"
 					durationOutputFile=$(bc <<<`$ffprobe -i "$outputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
-					echo "[$(date)] : Duration outputfile : $durationOutputFile seconds"
+					log_message " Duration is $durationOutputFile seconds"
 					difference=$(abs_diff $durationInputFile $durationOutputFile)
-					echo "[$(date)] : Difference: $difference seconds"
+					log_message " Difference is $difference seconds"
 					
 					differenceAsPercentage=$(bc <<<"scale=4; $difference / $durationInputFile * 100")
-					echo "[$(date)] : DifferenceAsPercentage: $differenceAsPercentage%"
+					log_message " DifferenceAsPercentage is $differenceAsPercentage%"
 					
-					if [ $(bc <<<"$differenceAsPercentage < $maxLengthDifferenceAsPercentage") -eq 1 ]; then
-						echo "[$(date)] : a previous successfull conversion was found which matched qua duration with \"$inputFile\""
-						if [ "$deleteOriginalFiles" = true ]; then
-							rm "$inputFile"
-							echo "[$(date)] : Deleted \"$inputFile\""
-						else
-							echo "[$(date)] : Skipped deletion of \"$inputFile\""
-						fi
+					if [ $(bc <<<"$differenceAsPercentage < $maxDurationDifferenceAsPercentage") -eq 1 ]; then
 						doConversion=false;
+						totalAlreadyConvertedRun=$((totalAlreadyConvertedRun + 1))
+						log_message "A previous successfull conversion was found which matched qua duration with \"$inputFile\""
+						
+						if [ "$deleteOriginalFiles" = true ]; then
+							delete_inputFile_and_outputFileVersions
+						else
+							log_message "Skipped deletion of \"$inputFile\""
+						fi
 					else
-						echo "[$(date)] : Previous conversion of inputfile \"$inputFile\" didn't match qua duration (maybe didn't finish, failed or file had different contents but with same filename)!"
+						log_message "Previous conversion of inputfile \"$inputFile\" didn't match qua duration (maybe didn't finish, failed or file had different contents but with same filename)!"
 						if [ "$redoConversionWhenInputAndOutputDontMatch" = true ]; then
-							echo "[$(date)] : Redoing transcoding of \"$inputFile\"!"
 							if [ "$keepPreviousConversion" = true ]; then
 								version=1
-								preservedOutputFile="${outputFile%.*}-prev-v$version.mp4"
+								preservedOutputFile="${outputFile%.*}$versionSuffix$version.mp4"
 								while [ -f "$preservedOutputFile" ]
 								do
 									version=$((version+1))
-									preservedOutputFile="${outputFile%.*}-prev-v$version.mp4"
+									preservedOutputFile="${outputFile%.*}$versionSuffix$version.mp4"
 								done
-								echo "[$(date)] : Keeping previous conversion and renaming to \"$preservedOutputFile\"!"
+								log_message "Keeping previous conversion and renaming to \"$preservedOutputFile\"!"
 								#rename file
 								mv "$outputFile" "$preservedOutputFile"
 							fi
 						else
-							echo "[$(date)] : NOT redoing transcoding of \"$inputFile\"!"
 							doConversion=false;
+							log_message "NOT redoing transcoding of \"$inputFile\"!"
 						fi
 					fi
 				else
 					doConversion=false;
-					echo "[$(date)] : file skipped, modified date is too young!"
+					log_message "File skipped, modified date is too young!"
 				fi
 			else
-				echo "[$(date)] : \"$outputFile\" does not exist."
+				log_message "Outputfile does not exist"
 			fi
 			
 			#check retries
 			if [ "$doConversion" = true ]; then
-				maxOutputFile="${outputFile%.*}-prev-v$maxRetries.mp4"
-				echo "[$(date)] : Testing if $maxOutputFile exist"
+				found_index=$(search_string inputFilesWithMaxRetries "$inputFile")
+				#strip extension from $outputFile
+				maxOutputFile="${outputFile%.*}$versionSuffix$maxRetries.mp4"
 				if [ -f "$maxOutputFile" ]; then
 					doConversion=false
-					echo "[$(date)] : Max. retries reached... skipping file!"
+					log_message "Max. retries reached because \"$maxOutputFile\" exist... skipping file!"
+					if [ $found_index -eq -1 ]; then
+						log_message " Adding it to $filenameInputFilesWithMaxRetries"
+						inputFilesWithMaxRetries+=("$inputFile")
+						save_to_file inputFilesWithMaxRetries $filenameInputFilesWithMaxRetries
+						nrOfNewInputFilesWithMaxRetries=$((nrOfNewInputFilesWithMaxRetries+1))
+					else
+						nrOfInputFilesWithAlreadyMaxRetries=$((nrOfInputFilesWithAlreadyMaxRetries+1))
+					fi
+				else
+					if (( found_index >= 0 )); then
+						log_message "Inputfile "$inputFile" had previously $maxRetries max retries! Removing it from $filenameInputFilesWithMaxRetries"
+						remove_string_at inputFilesWithMaxRetries $found_index
+						save_to_file inputFilesWithMaxRetries filenameInputFilesWithMaxRetries
+						nrOfRetriedFilesWithPreviouslyMaxRetries=$((nrOfRetriedFilesWithPreviouslyMaxRetries + 1))
+					fi
 				fi
 			fi
-			
+						
 			if [ "$doConversion" = true ]; then 
 				filesizeOutput=0
-				echo "[$(date)] : Re-encoding file..."
-				echo ""
-				#encoder: libx264 (~ 7x times smaller and speed=2.4x) 
-				#encoder: libx265 (~12x times smaller and speed=0.7x)
+				log_message "Re-encoding file \"$inputFile\"!"
+				#codec: H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10
+				#	encoder: libx264 	(~ 7x times smaller and speed=2.4x)
+				#	encoder: h264_vaapi (~ 7x times smaller and speed=2.4x)
+				#codec: H.265 / HEVC
+				#	encoder: libx265 	(~12x times smaller and speed=0.7x)
+				#	encoder: hevc_vaapi (~12x times smaller and speed=3.8x)
+				#	encoder: hevc_qsv   (~12x times smaller and speed=3.8x)
 				
 				#used commandline options ffmpeg explained:
 				# -loglevel   = show/log only errors
 				# -i          = use inputFile as input
 				# -y          = overwrite previous file
-				# -c:v        = re-encode video with ENCODER
+				# -c:v        = re-encode video with encoder
 				# =pix_fmt    = use yuv420p as pixelformat
 				# -c:a copy   = copy original audio
 				# -acodec mp3 = convert audio to mp3
-				$($ffmpeg -hwaccel vaapi -hwaccel_output_format vaapi -i "$inputFile" -y -c:v $ENCODER -acodec mp3 "$outputFile" -loglevel error)
-				filesizeOutput=$(stat -c%s "$outputFile")
-				percentage=$(bc <<<"scale=4; $filesizeOutput / $filesizeInput * 100")
-				echo ""
-				echo "[$(date)] : Percentage compression after conversion: $percentage"
+				#$($ffmpeg -hwaccel vaapi -hwaccel_output_format vaapi -i "$inputFile" -y -c:v $encoder -acodec mp3 "$outputFile" -loglevel error)
+				
+				timeBeforeConversion=$(date +%s)
+				if [ "$hardware" = "vaapi" ]; then
+					$ffmpeg -i "$inputFile" -y -vf 'format=nv12,hwupload' -c:v $encoder -qp $qualityLevel_vaapi -acodec mp3 "$outputFile" -loglevel $loglevel -v $loglevel -stats -init_hw_device vaapi=va:/dev/dri/renderD128
+				else
+					#else simple cmdline when non-vaapi
+					$ffmpeg -i "$inputFile" -y -c:v $encoder -crf $qualityLevel_software -global_quality $qualityLevel_qsv -acodec mp3 "$outputFile" -loglevel $loglevel -v $loglevel -stats
+				fi
+				
+				if [ -f "$outputFile" ]; then
+					timeAfterConversion=$(date +%s)
+					conversionTime=$((timeAfterConversion - timeBeforeConversion))
 
-				durationOutputFile=$(bc <<<`$ffprobe -i "$outputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
-				echo "[$(date)] : Duration outputfile : $durationOutputFile seconds"
-				difference=$(abs_diff $durationInputFile $durationOutputFile)
-				echo "[$(date)] : Difference: $difference seconds"
-
-				differenceAsPercentage=$(bc <<<"scale=4; $difference / $durationInputFile * 100")
-				echo "[$(date)] : DifferenceAsPercentage: $differenceAsPercentage%"
-
-				if [ -f "$outputFile" ] && [ $(bc <<<"$differenceAsPercentage < $maxLengthDifferenceAsPercentage") -eq 1 ]; then
-					echo "[$(date)] : Conversion succes, inputFile can be deleted"
+					filesizeOutput=$(stat -c%s "$outputFile")
+					percentage=$(bc <<<"scale=4; $filesizeOutput / $filesizeInput * 100")
+					log_message "Percentage compression after conversion: $percentage"
 					
-					if [ "$deleteOriginalFiles" = true ]; then
-						rm "$inputFile"
-						echo "[$(date)] : Deleted \"$inputFile\""
-					else
-						echo "[$(date)] : Skipped deletion of \"$inputFile\""
+					speedFactor=$(bc <<<"scale=4; $durationInputFile / $conversionTime")
+					formattedSpeedFactor=$(printf "%.2fx" $speedFactor)
+					log_message "Time it took to convert $durationInputFile seconds of videofile: $conversionTime seconds ($formattedSpeedFactor)"
+
+					durationOutputFile=$(bc <<<`$ffprobe -i "$outputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
+					log_message "Duration outputfile : $durationOutputFile seconds"
+					durationDifference=$(abs_diff $durationInputFile $durationOutputFile)
+					durationDifferenceAsPercentage=$(bc <<<"scale=4; $durationDifference / $durationInputFile * 100")
+					log_message "Duration difference: $durationDifference seconds ($durationDifferenceAsPercentage%)"
+					
+					if [ $(bc <<<"$durationDifferenceAsPercentage < $maxDurationDifferenceAsPercentage") -eq 1 ]; then
+						log_message "Conversion succesfull, inputFile can be deleted"
+
+						totalConversionTimeRun=$((totalConversionTimeRun + conversionTime))
+
+						#delete from inputFilesWithMaxRetries in case it previously had max retries
+						remove_string inputFilesWithMaxRetries $inputFile
+
+						totalSucceedsRun=$((totalSucceedsRun + 1))
+						totalDurationOfSuccessfullConvertedInputFilesRun=$(bc <<<"scale=4; $totalDurationOfSuccessfullConvertedInputFilesRun + $durationInputFile")
+
+						if [ "$deleteOriginalFiles" = true ]; then
+							delete_inputFile_and_outputFileVersions
+						else
+							log_message "Skipped deletion of \"$inputFile\" and (if any) previous converted version(s)"
+						fi
+						
+						if [ "$removeVideoXMLFile" = true ]; then
+							xmlFile="${inputFile%.*}.xml"
+							if [ -e "$xmlFile" ]
+							then
+								rm "$xmlFile"
+								log_message "Deleted \"$xmlFile\""
+							fi
+						fi
 					fi
-					
-					if [ "$removeVideoXMLFile" = true ]; then
-						xmlFile="${inputFile%.*}.xml"
-						rm "$xmlFile"
-						echo "[$(date)] : Deleted \"$xmlFile\""
-					fi
-					
 				else 
-					echo "[$(date)] : Conversion skipped, failed or incomplete"
+					if [ -f "$outputFile" ]; then
+						log_message "Conversion failed because the durationDifferenceAsPercentage >= $maxDurationDifferenceAsPercentage%"
+					else
+						log_message "Conversion failed!"
+					fi
+					
+					totalFailsRun=$((totalFailsRun + 1))
 				fi
 			fi
 		else
-			echo "[$(date)] : file skipped, modified date is too young!"
+			log_message "File is skipped because modified date is too young (probably in use)!"
+			
+			totalFilesTooYoungRun=$((totalFilesTooYoungRun + 1))
+		fi
+		
+		inputFilesLeft=$((inputFilesLeft - 1))
+		
+		#update runTime
+		time=$(date +%s)
+		runTime=$((time - startOfRun))
+		
+		#check if maxRunTime has surpassed
+		if [ $maxRunTimePerRunInMinutes -ge 0 ]; then
+			if [ $runTime -ge $((maxRunTimePerRunInMinutes*60)) ]; then
+				maxRunTimeReached=true
+				break
+			fi
 		fi
 	done
 
 	echo ""
-	echo "[$(date)] : done, no more files!"
-	echo "[$(date)] : waiting for next round!"
+
+	if [ $maxRunTimeReached ] && [ $inputFilesLeft -ge 1 ]; then
+		log_message "This run is already taking $(bc <<<"scale=2; $runTime / 60") minutes which exceeds maxRunTimePerRunInMinutes of $maxRunTimePerRunInMinutes minutes"
+		log_message "Run will be aborted with $inputFilesLeft files still left to do!"
+	else
+		log_message "Done, no more files!"
+	fi
 	
+	totalTriedConvertingFilesRun=$((totalSucceedsRun + totalFailsRun))
+	if [ $totalFilesRun -ge 1 ]; then
+		# totalTriedConvertingFilesRun=$((totalFilesRun - totalFilesTooYoungRun - totalAlreadyConvertedRun - inputFilesLeft))
+		
+		formattedSpeedFactor="-"
+		if [ $runTime -gt 0 ]; then
+			speedFactor=$(bc <<<"scale=4; $totalDurationOfSuccessfullConvertedInputFilesRun / $runTime")
+			formattedSpeedFactor=$(printf "%.2f" $speedFactor)
+		fi
+		
+		formattedSuccessPercentage="-"
+		if [ $totalTriedConvertingFilesRun -gt 0 ]; then
+			successPercentage=$(bc <<<"scale=4; $totalSucceedsRun / $totalTriedConvertingFilesRun * 100")
+			formattedSuccessPercentage=$(printf "%.0f" $successPercentage)
+		fi
+
+		totalFilesSkippedWithMaxRetries=$((nrOfNewInputFilesWithMaxRetries + nrOfInputFilesWithAlreadyMaxRetries))
+
+		log_message "Stats for this run:"
+		log_message " Total files $totalFilesRun"
+		log_message " $inputFilesLeft files left to do in next run(s) because MaxRunTime was reached"
+		log_message " $nrOfRetriedFilesWithPreviouslyMaxRetries files with previous max retries"
+		log_message " $totalFilesSkippedWithMaxRetries files skipped because max retries has been reached (new: $nrOfNewInputFilesWithMaxRetries old: $nrOfInputFilesWithAlreadyMaxRetries)"
+		log_message " $totalFilesTooYoungRun files skipped because modified date is too young"
+		log_message " $totalAlreadyConvertedRun files already successfully converted"
+		log_message " $totalFailsRun files were tried to convert but failed"
+		log_message " $totalSucceedsRun/$totalTriedConvertingFilesRun ($formattedSuccessPercentage %) files successfully converted!"
+		log_message " $totalSucceedsRun successfully converted files with total duration of $totalDurationOfSuccessfullConvertedInputFilesRun seconds took $totalConversionTimeRun seconds ($formattedSpeedFactor x) to convert"
+	fi
+	
+	totalTriedConvertingFilesRuns=$((totalTriedConvertingFilesRuns + totalTriedConvertingFilesRun))
+	totalRuns=$((totalRuns + 1))
+	totalSucceedsRuns=$((totalSucceedsRuns + totalSucceedsRun))
+	totalDurationOfSuccessfullConvertedInputFilesRuns=$(bc <<<"scale=4; $totalDurationOfSuccessfullConvertedInputFilesRuns + $totalDurationOfSuccessfullConvertedInputFilesRun")
+	totalConversionTimeRuns=$((totalConversionTimeRuns + totalConversionTimeRun))
+
+	if [ $totalTriedConvertingFilesRuns -gt 0 ] && [ $totalConversionTimeRuns -gt 0 ]; then
+		speedFactor=$(bc <<<"scale=4; $totalDurationOfSuccessfullConvertedInputFilesRuns / $totalConversionTimeRuns")
+		formattedSpeedFactor=$(printf "%.2f" $speedFactor)
+		successPercentage=$(bc <<<"scale=4; $totalSucceedsRuns / $totalTriedConvertingFilesRuns * 100")
+		formattedSuccessPercentage=$(printf "%.0f" $successPercentage)
+		totalFilesSkippedWithMaxRetries=${#inputFilesWithMaxRetries[@]}
+		#filesSkippedWithMaxRetries=$(for string in "${inputFilesWithMaxRetries[@]}"; do log_message "  $string\n"; done)
+		
+		log_message "Stats for all $totalRuns runs:"
+		if [ $totalFilesSkippedWithMaxRetries -gt 0 ]; then
+			log_message "  $totalFilesSkippedWithMaxRetries files currently skipped because max retries has been reached:"
+			print_array_on_new_lines inputFilesWithMaxRetries "   "
+		fi
+		log_message "  $totalSucceedsRuns/$totalTriedConvertingFilesRuns ($formattedSuccessPercentage %) files successfully converted!"
+		log_message "  $totalSucceedsRuns successfully converted files with total duration of $totalDurationOfSuccessfullConvertedInputFilesRuns seconds took $totalConversionTimeRuns seconds ($formattedSpeedFactor x) to convert"
+	fi
+	
+	log_message "Waiting for next round!"
+
 	if [ "$runOnce" = false ]; then
-		echo "[$(date)] : Rerun will start next day at $rerunAt, waiting..."
-		# in the case no files were found this round wait at least one minute to prevent immediately retriggering at same time
-		if [ $numFiles -eq 0 ]; then
+		newReRunAt=$rerunAt
+		if [ "$rerunAtIsRelative" = true ]; then
+			# Convert relative time string to seconds (using space as seperator)
+			IFS=' ' read hours minutes <<< "$newReRunAt"
+			time_in_seconds=$((hours * 3600 + minutes * 60))
+
+			# Add relative time (in seconds) to current time
+			current_time=$(date +%s)
+			newReRunAt=$(date -d "@$((current_time + time_in_seconds))" "+%H %M")
+		else
+			# in the case no files were found this round wait at least one minute to prevent immediately retriggering at same time
+			log_message "Waiting an extra minute to prevent immediate retriggering!"
 			sleep 61
 		fi
-		wait_till $rerunAt
+
+		log_message "Rerun will start at $newReRunAt, now waiting..."
+
+		wait_till $newReRunAt
+		log_message "Done waiting. Let's find new files that need converting..."
 	else
-		echo "[$(date)] : Running only once... exiting!"
+		log_message "Running only once... exiting!"
+		break
 	fi
 done
 	
-echo ""
+log_message "Ended"
