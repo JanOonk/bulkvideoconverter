@@ -4,25 +4,28 @@ ffmpeg=$JELLYFIN_FFMPEG
 # full path to ffprobe (here using Docker environment variable) by first taking the directory of JELLYFIN_FFMPEG
 ffprobe=${JELLYFIN_FFMPEG%/*}/ffprobe
 
-# if no (second) searchFolder argument is given when script is called this searchFolder will be used (space seperated)
-defaultSearchFolders=(
+# if no searchFolder -sf argument is given when script is called these searchFolders will be used (enter/space seperated)
+defaultSearchDirectories=(
 	"/videos/"
 )
 
-# if no (third) fileFilter argument is given when script is called this fileFilter will be used (space seperated)
+# if no fileFilter -ff argument is given when script is called these fileFilters will be used (enter/space seperated)
 defaultFileFilters=(
 	"*.ts"
 )
 
+# if no logFile -lf argument is given when script is called this logFile will be used
 defaultLogFile="convertVideos-logfile.txt"
 
-# if no (fourth) encoder argument is given when script is called this encoder will be used
+# if no encoder argument is given when script is called this encoder will be used
 # These encoders has been tested on Synology DS713+ using Docker:
 #  libx264 
 #  h264_vaapi
 #  libx265 
 #  hevc_vaapi
 #  hevc_qsv 
+#
+# But all encoders your ffmpeg installation supports should work, see `ffmpeg -encoders` or when using Jellyfin `$JELLYFIN_FFMPEG -encoders`
 defaultEncoder="hevc_vaapi"
 
 # minimum fileage in seconds for inputfiles to be considered to get converted and for outputfiles to be checked if reconverting is needed
@@ -30,17 +33,11 @@ defaultEncoder="hevc_vaapi"
 minFileAgeInSeconds=10
 
 # exclude folders, be sure to end with a / (space separated)
-defaultExcludedDirectories=( 
-	"/videos/test/"
-	"/videos/test2/"
-	"/videos/test3/"
-	"/videos/test4/"
+defaultExcludedDirectories=(
 )
 
 # ffmpeg quality of encoding
-qualityLevel_software=25
-qualityLevel_vaapi=25
-qualityLevel_qsv=25
+defaultQuality=25
 
 # Loglevel ffmpeg
 # quiet   - Show nothing at all; be silent.
@@ -75,20 +72,22 @@ keepPreviousConversion=true
 # after conversion delete original inputfile and if any previous failed conversions (files with the version suffix and version number)
 deleteOriginalFiles=true
 
-# is it allowed to have multiple instances running of this script (to be safe set to false)
+# is it allowed to have multiple instances running of this script (to be safe set to false), works only on the same host
 multipleInstancesAllowed=false
 
-# if false it will keep running (script is never exited) and 
-# will restart scanning automatically at the next scheduled time (see rerunAt and rerunAtIsRelative settings)
+# if runOnce is set to false it will keep running (script is never exited) and 
+#  will restart scanning automatically at the next scheduled time (see rerunAt and rerunAtIsRelative settings)
+# if runOnce is set to true it will only do one run and then exit
 runOnce=false
 
-# if runOnce is false then next rerun will be at a specific time or when rerunAtIsRelative is true some hours and minutes later (HH MM)
+# if runOnce is false then next rerun will be at a specific time OR when rerunAtIsRelative is true some hours and minutes later (HH MM)
 rerunAt="03 00"
 rerunAtIsRelative=false
 
 # maximum time for a run in minutes, or disable (-1)
 maxRunTimePerRunInMinutes=-1
 
+# in this file all full filenames will be stored that has hit maximum number of retries and will therefor be skipped
 filenameInputFilesWithMaxRetries="inputFilesWithMaxRetries.txt"
 # ---- END OF SETTINGS ----
 

@@ -30,15 +30,18 @@ searchDirectories=()
 fileFilters=()
 logFile=""
 encoder=""
-excludeDirectories=()
+excludedDirectories=()
+quality=-1
 
 # parse commandline arguments (last parameter) and save them in specified variable parameters
-parse_args settingsFile searchDirectories fileFilters logFile encoder excludeDirectories "$@"
+parse_args settingsFile searchDirectories fileFilters logFile encoder excludedDirectories quality "$@"
 # echo "settingsFile=$settingsFile"
 # echo "searchDirectories=${searchDirectories[@]}"
 # echo "fileFilters=${fileFilters[@]}"
 # echo "logFile=$logFile"
 # echo "encoder=$encoder"
+# echo "excludedDirectories=${excludedDirectories[@]}"
+# echo "quality=$quality"
 
 usingDefaultSettingsFile=$([ "$settingsFile" = "" ] && echo true || echo false)
 
@@ -53,6 +56,11 @@ includeSourceFile "$settingsFile"
 
 logFile=$(get_non_empty_string "$logFile" "$defaultLogFile")
 
+quality=$(get_positive_value $quality $defaultQuality)
+qualityLevel_software=$quality
+qualityLevel_vaapi=$quality
+qualityLevel_qsv=$quality
+
 includeSourceFile "app-functions.sh"
 
 if [ "$multipleInstancesAllowed" = false ] && check_if_running; then
@@ -61,12 +69,21 @@ if [ "$multipleInstancesAllowed" = false ] && check_if_running; then
 	exit 1
 fi
 
-searchDirectories=$(get_non_empty_string "$searchDirectories" "$defaultSearchFolders")
-fileFilters=$(get_non_empty_string "$fileFilters" "$defaultFileFilters")
+get_non_empty_array "searchDirectories" "defaultSearchDirectories" "searchDirectories"
+get_non_empty_array "fileFilters" "defaultFileFilters" "fileFilters"
 encoder=$(get_non_empty_string "$encoder" "$defaultEncoder")
-excludeDirectories=$(get_non_empty_string "$excludeDirectories" "$defaultExcludedDirectories")
+get_non_empty_array "excludedDirectories" "defaultExcludedDirectories" "excludedDirectories"
 
-if [ "$searchDirectories" = "" ] || [ "$fileFilters" = "" ] || [ "$encoder" = "" ]; then
+# echo "settingsFile=$settingsFile"
+# echo "searchDirectories=${searchDirectories[@]}"
+# echo "fileFilters=${fileFilters[@]}"
+# echo "fileFilters=${#fileFilters[@]}x"
+# echo "logFile=$logFile"
+# echo "encoder=$encoder"
+# echo "excludedDirectories=${excludedDirectories[@]}"
+# echo "quality=$quality"
+
+if [ "${#searchDirectories[@]}" -eq 0 ] || [ "${#fileFilters[@]}" -eq 0 ] || [ "$encoder" = "" ]; then
 	show_syntax
 	exit 1
 fi
@@ -114,16 +131,18 @@ while [ true ]
 do
 	startOfRun=$(date +%s)
 
-	readarray -t inputFiles < <(searchFiles searchDirectories[@] fileFilters[@] excludeDirectories[@])
+	readarray -t inputFiles < <(searchFiles searchDirectories[@] fileFilters[@] excludedDirectories[@])
 	inputFilesLeft=${#inputFiles[@]}
 	totalFilesRun=$inputFilesLeft
 	echo ""
 	log_message "${#searchDirectories[@]} search folder(s) will be searched"
 	print_array_on_new_lines searchDirectories " "
-	log_message "${#excludeDirectories[@]} folder(s) will be excluded from searching:"
-	print_array_on_new_lines excludeDirectories " "
-	log_message "$totalFilesRun inputfile(s) matching ${fileFilters[@]} were found:"
+	log_message "${#excludedDirectories[@]} folder(s) will be excluded from searching:"
+	print_array_on_new_lines excludedDirectories " "
+	logMessage="$totalFilesRun inputfile(s) matching ${fileFilters[@]} were found:"
+	log_message "$logMessage"
 	print_array_on_new_lines inputFiles " " true
+
 
 	fileNr=0
 	totalSucceedsRun=0

@@ -9,6 +9,24 @@ function includeSourceFile(){
 	fi
 }
 
+function get_non_empty_array {
+    # Assign references to the input arrays
+    declare -n arr1=$1
+    declare -n arr2=$2
+    declare -n arr3=$3
+
+    if [ ${#arr1[@]} -eq 0 ] && [ ${#arr2[@]} -eq 0 ]; then
+        # If both arrays are empty, make third array empty
+        arr3=()
+    elif [ ${#arr1[@]} -eq 0 ]; then
+        # If first array is empty, copy second array to third array
+        arr3=("${arr2[@]}")
+    else
+        # If second array is empty, copy first array to third array
+        arr3=("${arr1[@]}")
+    fi
+}
+
 function get_non_empty_string() {
 	if [ "$1" = "" ] && [ "$2" = "" ]; then
 		echo ""
@@ -16,6 +34,20 @@ function get_non_empty_string() {
 		echo "$2"
 	else
 		echo "$1"
+	fi
+}
+
+function get_positive_value() {
+	if [[ $1 -lt 0 && $2 -lt 0 ]]; then
+		if [[ $1 -gt $2 ]]; then
+			echo $1
+		else
+			echo $2
+		fi
+	elif [ $1 -lt 0 ]; then
+		echo $2
+	else
+		echo $1
 	fi
 }
 
