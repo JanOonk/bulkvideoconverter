@@ -25,7 +25,7 @@ Supported ffmpeg encoders can be checked with:
   `ffmpeg -encoders`
 
 Encoders benchmark results:
-  ![Encoders benchmark results](/Encoders benchmark results/Encoders benchmark results.png?raw=true "Encoders benchmark results")
+![test](https://github.com/JannemanDev/bulkvideoconverter/blob/b0deae5074e642f6cad04898c1bc9c32eae38bc3/Encoders%20benchmark%20results/Encoders%20benchmark%20results.png)
   
 ## Script Settings
 
