@@ -201,7 +201,7 @@ function remove_non_existing_files() {
   local -n arr2=$2 # assign the second array by reference
   local i
   
-  for (( i=0; i<${#arr[@]}; i++ )); do
+  for (( i=${#arr[@]}-1; i>=0; i-- )); do
     if [[ ! -e "${arr[$i]}" ]]; then
       arr2+=("${arr[$i]}") # add non-existing file to the second array
       unset arr[$i] # remove non-existing file from the first array
