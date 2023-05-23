@@ -127,6 +127,8 @@ totalDurationOfSuccessfullConvertedInputFilesRuns=0
 inputFilesWithMaxRetries=()
 load_from_file $filenameInputFilesWithMaxRetries inputFilesWithMaxRetries
 
+exit_code=0
+
 while [ true ]
 do
 	startOfRun=$(date +%s)
@@ -151,6 +153,10 @@ do
 	totalFilesTooYoungRun=0
 	totalDurationOfSuccessfullConvertedInputFilesRun=0
 	totalConversionTimeRun=0
+	
+	inputFilesConvertedRun=()
+	outputFilesConvertedRun=()
+	filesFailedRun=()
 	
 	nrOfNewInputFilesWithMaxRetries=0
 	nrOfInputFilesWithAlreadyMaxRetries=0
@@ -339,7 +345,9 @@ do
 
 						#delete from inputFilesWithMaxRetries in case it previously had max retries
 						remove_string inputFilesWithMaxRetries $inputFile
-
+						inputFilesConvertedRun+=("$inputFile")
+						outputFilesConvertedRun+=("$outputFile")
+						
 						totalSucceedsRun=$((totalSucceedsRun + 1))
 						totalDurationOfSuccessfullConvertedInputFilesRun=$(bc <<<"scale=4; $totalDurationOfSuccessfullConvertedInputFilesRun + $durationInputFile")
 
@@ -366,6 +374,7 @@ do
 					fi
 					
 					totalFailsRun=$((totalFailsRun + 1))
+					filesFailedRun+=("$inputFile")
 				fi
 			fi
 		else
@@ -451,6 +460,28 @@ do
 		log_message "  $totalSucceedsRuns successfully converted files with total duration of $totalDurationOfSuccessfullConvertedInputFilesRuns seconds took $totalConversionTimeRuns seconds ($formattedSpeedFactor x) to convert"
 	fi
 	
+	# Convert arrays to comma-separated strings
+	inputFilesConvertedRun_string=$(IFS=','; echo "${inputFilesConvertedRun[*]}")
+	outputFilesConvertedRun_string=$(IFS=','; echo "${outputFilesConvertedRun[*]}")
+	filesFailedRun_string=$(IFS=','; echo "${filesFailedRun[*]}")
+	inputFilesWithMaxRetries_string=$(IFS=','; echo "${inputFilesWithMaxRetries[*]}")
+
+	# Call the script in a subshell and pass the array strings as arguments
+	( "$postRunScript" "$inputFilesConvertedRun_string" "$outputFilesConvertedRun_string" "$filesFailedRun_string" "$inputFilesWithMaxRetries_string" )
+
+	# Capture the exit code of the called script
+	exit_code=$?
+
+	# Check the exit code
+	if [[ $exit_code -eq 0 ]]; then
+		log_message "postRun.sh script completed successfully!"
+	else
+		log_message "postRun.sh script returned a non-zero exit code: $exit_code"
+		if [[ $stopWhenPostRunScriptFails == true ]]; then
+			break;
+		fi
+	fi
+	
 	log_message "Waiting for next round!"
 
 	if [ "$runOnce" = false ]; then
@@ -480,3 +511,4 @@ do
 done
 	
 log_message "Ended"
+exit $exit_code

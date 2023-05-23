@@ -1,4 +1,5 @@
 # ---- BEGIN OF SETTINGS ----
+
 # full path to ffmpeg (here using Docker environment variable)
 ffmpeg=$JELLYFIN_FFMPEG
 # full path to ffprobe (here using Docker environment variable) by first taking the directory of JELLYFIN_FFMPEG
@@ -89,5 +90,9 @@ maxRunTimePerRunInMinutes=-1
 
 # in this file all full filenames will be stored that has hit maximum number of retries and will therefor be skipped
 filenameInputFilesWithMaxRetries="inputFilesWithMaxRetries.txt"
-# ---- END OF SETTINGS ----
 
+# call post run script
+postRunScript="./postRun.sh"
+stopWhenPostRunScriptFails=true
+
+# ---- END OF SETTINGS ----
