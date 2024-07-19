@@ -10,6 +10,26 @@ function log_message() {
     echo "$completeMessage" >> "$filename"
 }
 
+function log_message_without_timestamp() {
+	declare -g logFile
+    message="$1"
+    filename="${2:-$logFile}"
+
+	completeMessage="$message"
+    echo "$completeMessage"
+    echo "$completeMessage" >> "$filename"
+}
+
+function log_inlinemessage() {
+	declare -g logFile
+    message="$1"
+    filename="${2:-$logFile}"
+
+	completeMessage="[$(date)] : $message"
+    echo -n "$completeMessage"
+    echo -n "$completeMessage" >> "$filename"
+}
+
 function delete_inputFile_and_outputFileVersions(){
 	declare -g inputFile
 	declare -g outputFile

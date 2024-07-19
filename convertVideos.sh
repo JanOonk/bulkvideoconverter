@@ -145,7 +145,6 @@ do
 	log_message "$logMessage"
 	print_array_on_new_lines inputFiles " " true
 
-
 	fileNr=0
 	totalSucceedsRun=0
 	totalAlreadyConvertedRun=0
@@ -186,203 +185,229 @@ do
 		log_message "---------------"
 		
 		fileNr=$((fileNr+1))
-		log_message "Next inputfile #$fileNr \"$inputFile\""
+		log_message "Next inputfile #$fileNr"
+		log_message " Inputfile \"$inputFile\""
 
-		#only consider .ts files of which recording has finished (for example by HDHomeRun) (that means are old enough)
-		inputfileAgeInSeconds=$(($(date +%s) - $(date +%s -r "$inputFile")))
-		log_message " File age is $inputfileAgeInSeconds seconds"
+        #current folder
+        # currentFolder="${inputFile%/*}"
+        #remove extension and add .mp4
+        outputFile="${inputFile%.*}.mp4"
+        
+		doConversion=true;
+        
+        #first check for file to be converted if it has not reached max retries else skip conversion
+        found_index=$(search_string inputFilesWithMaxRetries "$inputFile")
+        #strip extension from $outputFile
+        maxOutputFile="${outputFile%.*}$versionSuffix$maxRetries.mp4"
+        if [ -f "$maxOutputFile" ]; then
+            doConversion=false
+            log_message " Max. retries reached because \"$maxOutputFile\" exist... skipping file!"
+            if [ $found_index -eq -1 ]; then
+                log_message " Adding it to $filenameInputFilesWithMaxRetries"
+                inputFilesWithMaxRetries+=("$inputFile")
+                save_to_file inputFilesWithMaxRetries $filenameInputFilesWithMaxRetries
+                nrOfNewInputFilesWithMaxRetries=$((nrOfNewInputFilesWithMaxRetries+1))
+            else
+                nrOfInputFilesWithAlreadyMaxRetries=$((nrOfInputFilesWithAlreadyMaxRetries+1))
+            fi
+        else
+            if (( found_index >= 0 )); then
+                log_message " Inputfile had previously reached $maxRetries max retries!"
+                log_message " Removing it from \"$filenameInputFilesWithMaxRetries\""
+                remove_string_at inputFilesWithMaxRetries $found_index
+                save_to_file inputFilesWithMaxRetries filenameInputFilesWithMaxRetries
+                nrOfRetriedFilesWithPreviouslyMaxRetries=$((nrOfRetriedFilesWithPreviouslyMaxRetries + 1))
+            fi
+        fi
 
-		durationInputFile=$(bc <<<`$ffprobe -i "$inputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
-		log_message " Duration is $durationInputFile seconds"
+        if [ "$doConversion" = true ]; then
+            log_message " Inputfile:"
+            #only consider .ts files of which recording has finished (for example by HDHomeRun) (that means are old enough)
+            inputfileAgeInSeconds=$(($(date +%s) - $(date +%s -r "$inputFile")))
+            timeString=$(convertSecondsToTimeString "$inputfileAgeInSeconds")
+            log_message "  File age is $inputfileAgeInSeconds seconds ($timeString)"
 
-		if [ $inputfileAgeInSeconds -ge $minFileAgeInSeconds ]; then
-			filesizeInput=$(get_filesize_in_bytes "$inputFile")
-			formattedFilesize=$(format_filesize $filesizeInput)
-			log_message " Size is $formattedFilesize"
+            if [ $inputfileAgeInSeconds -ge $minFileAgeInSeconds ]; then
+                log_inlinemessage "  Duration is (this can take a while): "
+                durationInputFile=$(determineDurationVideoInSeconds "$inputFile" "$ffmpeg")
+                timeString=$(convertSecondsToTimeString "$durationInputFile")
+                log_message_without_timestamp "$durationInputFile seconds ($timeString)"
 
-			#current folder
-			currentFolder="${inputFile%/*}"
-			#remove extension and add .mp4
-			outputFile="${inputFile%.*}.mp4"
+                filesizeInput=$(get_filesize_in_bytes "$inputFile")
+                formattedFilesize=$(format_filesize $filesizeInput)
+                log_message "  Size is $formattedFilesize"
 
-			doConversion=true;
-			log_message "Outputfile name is \"$outputFile\""
-			if [ -f "$outputFile" ]; then
-				filesizeOutput=$(get_filesize_in_bytes "$outputFile")
-				formattedFilesize=$(format_filesize $filesizeOutput)
-				log_message " Size is $formattedFilesize"
+                log_message " Outputfile is \"$outputFile\""
 
-				#skip .mp4 files which are not old enough, in case a process is converting/writing to them
-				outputfileAgeInSeconds=$(($(date +%s) - $(date +%s -r "$outputFile")))
-				log_message " File age is $outputfileAgeInSeconds seconds"
+                if [ -f "$outputFile" ]; then
+                    filesizeOutput=$(get_filesize_in_bytes "$outputFile")
+                    formattedFilesize=$(format_filesize $filesizeOutput)
+                    log_message "  Size is $formattedFilesize"
 
-				if [ $outputfileAgeInSeconds -ge $minFileAgeInSeconds ]; then
-					percentage=$(bc <<<"scale=4; $filesizeOutput / $filesizeInput * 100")
-					log_message " Percentage compression compared to inputfile is $percentage%"
-					durationOutputFile=$(bc <<<`$ffprobe -i "$outputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
-					log_message " Duration is $durationOutputFile seconds"
-					difference=$(abs_diff $durationInputFile $durationOutputFile)
-					log_message " Difference is $difference seconds"
-					
-					differenceAsPercentage=$(bc <<<"scale=4; $difference / $durationInputFile * 100")
-					log_message " DifferenceAsPercentage is $differenceAsPercentage%"
-					
-					if [ $(bc <<<"$differenceAsPercentage < $maxDurationDifferenceAsPercentage") -eq 1 ]; then
-						doConversion=false;
-						totalAlreadyConvertedRun=$((totalAlreadyConvertedRun + 1))
-						log_message "A previous successfull conversion was found which matched qua duration with \"$inputFile\""
-						
-						if [ "$deleteOriginalFiles" = true ]; then
-							delete_inputFile_and_outputFileVersions
-						else
-							log_message "Skipped deletion of \"$inputFile\""
-						fi
-					else
-						log_message "Previous conversion of inputfile \"$inputFile\" didn't match qua duration (maybe didn't finish, failed or file had different contents but with same filename)!"
-						if [ "$redoConversionWhenInputAndOutputDontMatch" = true ]; then
-							if [ "$keepPreviousConversion" = true ]; then
-								version=1
-								preservedOutputFile="${outputFile%.*}$versionSuffix$version.mp4"
-								while [ -f "$preservedOutputFile" ]
-								do
-									version=$((version+1))
-									preservedOutputFile="${outputFile%.*}$versionSuffix$version.mp4"
-								done
-								log_message "Keeping previous conversion and renaming to \"$preservedOutputFile\"!"
-								#rename file
-								mv "$outputFile" "$preservedOutputFile"
-							fi
-						else
-							doConversion=false;
-							log_message "NOT redoing transcoding of \"$inputFile\"!"
-						fi
-					fi
-				else
-					doConversion=false;
-					log_message "File skipped, modified date is too young!"
-				fi
-			else
-				log_message "Outputfile does not exist"
-			fi
-			
-			#check retries
-			if [ "$doConversion" = true ]; then
-				found_index=$(search_string inputFilesWithMaxRetries "$inputFile")
-				#strip extension from $outputFile
-				maxOutputFile="${outputFile%.*}$versionSuffix$maxRetries.mp4"
-				if [ -f "$maxOutputFile" ]; then
-					doConversion=false
-					log_message "Max. retries reached because \"$maxOutputFile\" exist... skipping file!"
-					if [ $found_index -eq -1 ]; then
-						log_message " Adding it to $filenameInputFilesWithMaxRetries"
-						inputFilesWithMaxRetries+=("$inputFile")
-						save_to_file inputFilesWithMaxRetries $filenameInputFilesWithMaxRetries
-						nrOfNewInputFilesWithMaxRetries=$((nrOfNewInputFilesWithMaxRetries+1))
-					else
-						nrOfInputFilesWithAlreadyMaxRetries=$((nrOfInputFilesWithAlreadyMaxRetries+1))
-					fi
-				else
-					if (( found_index >= 0 )); then
-						log_message "Inputfile "$inputFile" had previously $maxRetries max retries! Removing it from $filenameInputFilesWithMaxRetries"
-						remove_string_at inputFilesWithMaxRetries $found_index
-						save_to_file inputFilesWithMaxRetries filenameInputFilesWithMaxRetries
-						nrOfRetriedFilesWithPreviouslyMaxRetries=$((nrOfRetriedFilesWithPreviouslyMaxRetries + 1))
-					fi
-				fi
-			fi
-						
-			if [ "$doConversion" = true ]; then 
-				filesizeOutput=0
-				log_message "Re-encoding file \"$inputFile\"!"
-				#codec: H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10
-				#	encoder: libx264 	(~ 7x times smaller and speed=2.4x)
-				#	encoder: h264_vaapi (~ 7x times smaller and speed=2.4x)
-				#codec: H.265 / HEVC
-				#	encoder: libx265 	(~12x times smaller and speed=0.7x)
-				#	encoder: hevc_vaapi (~12x times smaller and speed=3.8x)
-				#	encoder: hevc_qsv   (~12x times smaller and speed=3.8x)
-				
-				#used commandline options ffmpeg explained:
-				# -loglevel   = show/log only errors
-				# -i          = use inputFile as input
-				# -y          = overwrite previous file
-				# -c:v        = re-encode video with encoder
-				# =pix_fmt    = use yuv420p as pixelformat
-				# -c:a copy   = copy original audio
-				# -acodec mp3 = convert audio to mp3
-				#$($ffmpeg -hwaccel vaapi -hwaccel_output_format vaapi -i "$inputFile" -y -c:v $encoder -acodec mp3 "$outputFile" -loglevel error)
-				
-				timeBeforeConversion=$(date +%s)
-				if [ "$hardware" = "vaapi" ]; then
-					$ffmpeg -i "$inputFile" -y -vf 'format=nv12,hwupload' -c:v $encoder -qp $qualityLevel_vaapi -acodec mp3 "$outputFile" -loglevel $loglevel -v $loglevel -stats -init_hw_device vaapi=va:/dev/dri/renderD128
-				else
-					#else simple cmdline when non-vaapi
-					$ffmpeg -i "$inputFile" -y -c:v $encoder -crf $qualityLevel_software -global_quality $qualityLevel_qsv -acodec mp3 "$outputFile" -loglevel $loglevel -v $loglevel -stats
-				fi
-				
-				if [ -f "$outputFile" ]; then
-					timeAfterConversion=$(date +%s)
-					conversionTime=$((timeAfterConversion - timeBeforeConversion))
+                    #skip .mp4 files which are not old enough, in case a process is converting/writing to them
+                    outputfileAgeInSeconds=$(($(date +%s) - $(date +%s -r "$outputFile")))
+                    timeString=$(convertSecondsToTimeString "$outputfileAgeInSeconds")
+                    log_message "  File age is $outputfileAgeInSeconds seconds ($timeString)"
 
-					filesizeOutput=$(stat -c%s "$outputFile")
-					percentage=$(bc <<<"scale=4; $filesizeOutput / $filesizeInput * 100")
-					log_message "Percentage compression after conversion: $percentage"
-					
-					speedFactor=$(bc <<<"scale=4; $durationInputFile / $conversionTime")
-					formattedSpeedFactor=$(printf "%.2fx" $speedFactor)
-					log_message "Time it took to convert $durationInputFile seconds of videofile: $conversionTime seconds ($formattedSpeedFactor)"
+                    if [ $outputfileAgeInSeconds -ge $minFileAgeInSeconds ]; then
+                        percentage=$(bc <<<"scale=4; $filesizeOutput / $filesizeInput * 100")
+                        log_message "  Percentage compression compared to inputfile is $percentage%"
+                        
+                        log_inlinemessage "  Duration is (this can take a while): "
+                        durationOutputFile=$(determineDurationVideoInSeconds "$outputFile" "$ffmpeg")
+                        timeString=$(convertSecondsToTimeString "$durationOutputFile")
+                        log_message_without_timestamp "$durationOutputFile seconds ($timeString)"
+                        difference=$(abs_diff $durationInputFile $durationOutputFile)
+                        timeString=$(convertSecondsToTimeString "$difference")
+                        log_message "  Difference is $difference seconds ($timeString)"
+        
+                        differenceAsPercentage=$(bc <<<"scale=4; $difference / $durationInputFile * 100")
+                        log_message "  DifferenceAsPercentage is $differenceAsPercentage%"
+                        
+                        if [ $(bc <<<"$differenceAsPercentage < $maxDurationDifferenceAsPercentage") -eq 1 ]; then
+                            doConversion=false;
+                            totalAlreadyConvertedRun=$((totalAlreadyConvertedRun + 1))
+                            log_message " A previous successfull conversion was found which matched qua duration with \"$inputFile\""
+                            
+                            if [ "$deleteOriginalFiles" = true ]; then
+                                delete_inputFile_and_outputFileVersions
+                            else
+                                log_message "Skipped deletion of \"$inputFile\""
+                            fi
+                        else
+                            log_message " Previous conversion didn't match qua duration (maybe didn't finish, corrupt, failed or file had different contents and length but with same filename)!"
+                            if [ "$redoConversionWhenInputAndOutputDontMatch" = true ]; then
+                                if [ "$keepPreviousConversion" = true ]; then
+                                    version=1
+                                    preservedOutputFile="${outputFile%.*}$versionSuffix$version.mp4"
+                                    
+                                    while [ -f "$preservedOutputFile" ]
+                                    do
+                                        version=$((version+1))
+                                        preservedOutputFile="${outputFile%.*}$versionSuffix$version.mp4"
+                                    done
+                                    
+                                    log_message " Keeping previous conversion and renaming to \"$preservedOutputFile\"!"
+                                    
+                                    #rename file
+                                    mv "$outputFile" "$preservedOutputFile"
+                                fi
+                            else
+                                doConversion=false;
+                                log_message " NOT redoing transcoding of \"$inputFile\"!"
+                            fi
+                        fi
+                    else
+                        doConversion=false;
+                        log_message " File is skipped because modified date is too young (probably in use, converting?)!"
+                    fi
+                else
+                    log_message " Outputfile does not exist"
+                fi
+                
+                if [ "$doConversion" = true ]; then 
+                    filesizeOutput=0
+                    log_message " Re-encoding file \"$inputFile\"!"
+                    #codec: H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10
+                    #	encoder: libx264 	(~ 7x times smaller and speed=2.4x)
+                    #	encoder: h264_vaapi (~ 7x times smaller and speed=2.4x)
+                    #codec: H.265 / HEVC
+                    #	encoder: libx265 	(~12x times smaller and speed=0.7x)
+                    #	encoder: hevc_vaapi (~12x times smaller and speed=3.8x)
+                    #	encoder: hevc_qsv   (~12x times smaller and speed=3.8x)
+                    
+                    #used commandline options ffmpeg explained:
+                    # -loglevel                     = show/log only errors
+                    # -i                            = use inputFile as input
+                    # -y                            = overwrite previous file
+                    # -c:v                          = re-encode video with encoder
+                    # =pix_fmt                      = use yuv420p as pixelformat
+                    # -c:a copy                     = copy original audio
+                    # -acodec mp3                   = convert audio to mp3
+                    # -analyzeduration 10000000     = better stream detection for slightly corrupt files (put before -i !) 
+                    # -probesize 10000000           = better stream detection for slightly corrupt files (put before -i !)
+                    #$($ffmpeg -hwaccel vaapi -hwaccel_output_format vaapi -i "$inputFile" -y -c:v $encoder -acodec mp3 "$outputFile" -loglevel error)
+                    
+                    timeBeforeConversion=$(date +%s)
+                    if [ "$hardware" = "vaapi" ]; then
+                        $ffmpeg -analyzeduration 10000000 -probesize 10000000 -i "$inputFile" -y -vf 'format=nv12,hwupload' -c:v $encoder -qp $qualityLevel_vaapi -acodec mp3 "$outputFile" -loglevel $loglevel -v $loglevel -stats -init_hw_device vaapi=va:/dev/dri/renderD128
+                    else
+                        #else simple cmdline when non-vaapi
+                        $ffmpeg -analyzeduration 10000000 -probesize 10000000 -i "$inputFile" -y -c:v $encoder -crf $qualityLevel_software -global_quality $qualityLevel_qsv -acodec mp3 "$outputFile" -loglevel $loglevel -v $loglevel -stats
+                    fi
+                    
+                    conversionOk=false;
+                    if [ -f "$outputFile" ]; then
+                        timeAfterConversion=$(date +%s)
+                        conversionTime=$((timeAfterConversion - timeBeforeConversion))
 
-					durationOutputFile=$(bc <<<`$ffprobe -i "$outputFile" -v quiet -print_format json -show_format | ./jq '.format.duration'`)
-					log_message "Duration outputfile : $durationOutputFile seconds"
-					durationDifference=$(abs_diff $durationInputFile $durationOutputFile)
-					durationDifferenceAsPercentage=$(bc <<<"scale=4; $durationDifference / $durationInputFile * 100")
-					log_message "Duration difference: $durationDifference seconds ($durationDifferenceAsPercentage%)"
-					
-					if [ $(bc <<<"$durationDifferenceAsPercentage < $maxDurationDifferenceAsPercentage") -eq 1 ]; then
-						log_message "Conversion succesfull, inputFile can be deleted"
+                        filesizeOutput=$(stat -c%s "$outputFile")
+                        percentage=$(bc <<<"scale=4; $filesizeOutput / $filesizeInput * 100")
+                        log_message "  Percentage compression after conversion: $percentage%"
+                        
+                        speedFactor=$(bc <<<"scale=4; $durationInputFile / $conversionTime")
+                        formattedSpeedFactor=$(printf "%.2fx" $speedFactor)
+                        timeString=$(convertSecondsToTimeString "$conversionTime")
+                        log_message "  Time it took to convert $durationInputFile seconds of videofile: $conversionTime seconds ($timeString) ($formattedSpeedFactor)"
 
-						totalConversionTimeRun=$((totalConversionTimeRun + conversionTime))
+                        log_inlinemessage "  Duration is (this can take a while): "
+                        durationOutputFile=$(determineDurationVideoInSeconds "$outputFile" "$ffmpeg")
+                        timeString=$(convertSecondsToTimeString "$durationOutputFile")
+                        log_message_without_timestamp "$durationOutputFile seconds ($timeString)"
+                        difference=$(abs_diff $durationInputFile $durationOutputFile)
+                        timeString=$(convertSecondsToTimeString "$difference")
+                        log_message "  Difference is $difference seconds ($timeString)"
+        
+                        durationDifferenceAsPercentage=$(bc <<<"scale=4; $difference / $durationInputFile * 100")
+                        log_message "  DifferenceAsPercentage is $durationDifferenceAsPercentage%"
+                        
+                        if [ $(bc <<<"$durationDifferenceAsPercentage < $maxDurationDifferenceAsPercentage") -eq 1 ]; then
+                            conversionOk=true;
+                            log_message " Conversion succesfull, inputFile can be deleted"
 
-						#delete from inputFilesWithMaxRetries in case it previously had max retries
-						remove_string inputFilesWithMaxRetries $inputFile
-						inputFilesConvertedRun+=("$inputFile")
-						outputFilesConvertedRun+=("$outputFile")
-						
-						totalSucceedsRun=$((totalSucceedsRun + 1))
-						totalDurationOfSuccessfullConvertedInputFilesRun=$(bc <<<"scale=4; $totalDurationOfSuccessfullConvertedInputFilesRun + $durationInputFile")
+                            totalConversionTimeRun=$((totalConversionTimeRun + conversionTime))
 
-						if [ "$deleteOriginalFiles" = true ]; then
-							delete_inputFile_and_outputFileVersions
-						else
-							log_message "Skipped deletion of \"$inputFile\" and (if any) previous converted version(s)"
-						fi
-						
-						if [ "$removeVideoXMLFile" = true ]; then
-							xmlFile="${inputFile%.*}.xml"
-							if [ -e "$xmlFile" ]
-							then
-								rm "$xmlFile"
-								log_message "Deleted \"$xmlFile\""
-							fi
-						fi
-					fi
-				else 
-					if [ -f "$outputFile" ]; then
-						log_message "Conversion failed because the durationDifferenceAsPercentage >= $maxDurationDifferenceAsPercentage%"
-					else
-						log_message "Conversion failed!"
-					fi
-					
-					totalFailsRun=$((totalFailsRun + 1))
-					filesFailedRun+=("$inputFile")
-				fi
-			fi
-		else
-			log_message "File is skipped because modified date is too young (probably in use)!"
-			
-			totalFilesTooYoungRun=$((totalFilesTooYoungRun + 1))
+                            #delete from inputFilesWithMaxRetries in case it previously had max retries
+                            remove_string inputFilesWithMaxRetries $inputFile
+                            inputFilesConvertedRun+=("$inputFile")
+                            outputFilesConvertedRun+=("$outputFile")
+                            
+                            totalSucceedsRun=$((totalSucceedsRun + 1))
+                            totalDurationOfSuccessfullConvertedInputFilesRun=$(bc <<<"scale=4; $totalDurationOfSuccessfullConvertedInputFilesRun + $durationInputFile")
+
+                            if [ "$deleteOriginalFiles" = true ]; then
+                                delete_inputFile_and_outputFileVersions
+                            else
+                                log_message " Skipped deletion of \"$inputFile\" and (if any) previous converted version(s)"
+                            fi
+                            
+                            if [ "$removeVideoXMLFile" = true ]; then
+                                xmlFile="${inputFile%.*}.xml"
+                                if [ -e "$xmlFile" ]
+                                then
+                                    rm "$xmlFile"
+                                    log_message "Deleted \"$xmlFile\""
+                                fi
+                            fi
+                        else
+                            log_message " Conversion failed because the durationDifferenceAsPercentage >= $maxDurationDifferenceAsPercentage%"
+                        fi
+                    else 
+                        log_message " Conversion failed, outputfile \"$outputFile\" was NOT created after conversion!"
+                    fi
+                    
+                    if [ "$conversionOk" = false ]; then 
+                        totalFailsRun=$((totalFailsRun + 1))
+                        filesFailedRun+=("$inputFile")
+                    fi
+                fi
+            else
+                log_message " File is skipped because modified date is too young (probably in use, recording?)!"
+                
+                totalFilesTooYoungRun=$((totalFilesTooYoungRun + 1))
+            fi
 		fi
-		
+        
 		inputFilesLeft=$((inputFilesLeft - 1))
 		
 		#update runTime
@@ -433,8 +458,8 @@ do
 		log_message " $totalFilesTooYoungRun files skipped because modified date is too young"
 		log_message " $totalAlreadyConvertedRun files already successfully converted"
 		log_message " $totalFailsRun files were tried to convert but failed"
+		log_message " $totalSucceedsRun successfully converted files with total duration of $totalDurationOfSuccessfullConvertedInputFilesRun seconds, took $totalConversionTimeRun seconds ($formattedSpeedFactor x) to convert"
 		log_message " $totalSucceedsRun/$totalTriedConvertingFilesRun ($formattedSuccessPercentage %) files successfully converted!"
-		log_message " $totalSucceedsRun successfully converted files with total duration of $totalDurationOfSuccessfullConvertedInputFilesRun seconds took $totalConversionTimeRun seconds ($formattedSpeedFactor x) to convert"
 	fi
 	
 	totalTriedConvertingFilesRuns=$((totalTriedConvertingFilesRuns + totalTriedConvertingFilesRun))

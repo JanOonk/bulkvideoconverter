@@ -50,16 +50,16 @@ defaultQuality=25
 # verbose - Same as info, except more verbose.
 # debug   - Show everything, including debugging information.
 # trace
-loglevel=verbose
+loglevel=quiet
 
 # how many conversion retries (1 try per run)
-maxRetries=3
+maxRetries=2
 
 # after successfull conversion delete corresponding .xml file which HDHomeRun generates?
 removeVideoXMLFile=true
 
 # how much tolereance between inputfile and outputfile to be a match (means conversion is succesfull)
-maxDurationDifferenceAsPercentage=1
+maxDurationDifferenceAsPercentage=1.5
 redoConversionWhenInputAndOutputDontMatch=true
 
 # In some rare cases you can have an outputfile which has the same filename (without extension) as an inputfile,
@@ -74,7 +74,7 @@ keepPreviousConversion=true
 deleteOriginalFiles=true
 
 # is it allowed to have multiple instances running of this script (to be safe set to false), works only on the same host
-multipleInstancesAllowed=false
+multipleInstancesAllowed=true
 
 # if runOnce is set to false it will keep running (script is never exited) and 
 #  will restart scanning automatically at the next scheduled time (see rerunAt and rerunAtIsRelative settings)
@@ -93,6 +93,6 @@ filenameInputFilesWithMaxRetries="inputFilesWithMaxRetries.txt"
 
 # call post run script
 postRunScript="./postRun.sh"
-stopWhenPostRunScriptFails=true
+stopWhenPostRunScriptFails=false
 
 # ---- END OF SETTINGS ----

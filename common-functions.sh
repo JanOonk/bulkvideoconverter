@@ -58,7 +58,7 @@ searchFiles() {
 	local exclude_count=${#excludedFolders[@]}
 
 	if [ $exclude_count -eq 0 ]; then
-        find "${searchFolders[@]}" \( -name "${fileFilters[0]}" $(printf -- '-o -name "%s" ' "${fileFilters[@]:1}") \)
+        find "${searchFolders[@]}" \( -name "${fileFilters[0]}" $(printf -- '-o -name "%s" ' "${fileFilters[@]:1}") \) -size +0c 
         return $?
     fi
 
@@ -73,7 +73,7 @@ searchFiles() {
 	
 	# Search in all folders with all filters
 	# echo "find ${searchFolders[@]} \( -name \"${fileFilters[0]}\" $(printf -- '-o -name \"%s\" ' "${fileFilters[@]:1}") \) -print0 | grep -zZEv \"${regex}\" | tr '\0' '\n'"
-	find "${searchFolders[@]}" \( -name "${fileFilters[0]}" $(printf -- '-o -name "%s" ' "${fileFilters[@]:1}") \) -print0 | grep -zZEv "${regex}" | tr '\0' '\n'
+	find "${searchFolders[@]}" \( -name "${fileFilters[0]}" $(printf -- '-o -name "%s" ' "${fileFilters[@]:1}") \) -size +0c -print0 | grep -zZEv "${regex}" | tr '\0' '\n'
 
 	return $?
 }
@@ -254,4 +254,32 @@ function remove_string_at() {
 	  # Remove the element at the given index using array slicing
 	  array=("${array[@]:0:$index}" "${array[@]:$((index+1))}")
   fi
+}
+
+determineDurationVideoInSeconds() {
+    local inputFile="$1"
+    local ffmpegPath="$2"
+
+    durationInputFile=$($ffmpegPath -analyzeduration 10000000 -probesize 10000000 -i "$inputFile" -c copy -f null - 2>&1 | awk -F= '
+    BEGIN { RS=" " }
+    /^time=/ { t=$2 }
+    END {
+        split(t, a, ":")
+        seconds = a[1] * 3600 + a[2] * 60 + a[3]
+        print seconds
+    }')
+
+    echo "$durationInputFile"
+}
+
+convertSecondsToTimeString() {
+    local totalSeconds=$1
+    local days=$(echo "scale=0; $totalSeconds / 86400" | bc)
+    local remainingSeconds=$(echo "$totalSeconds - ($days * 86400)" | bc)
+    local hours=$(echo "scale=0; $remainingSeconds / 3600" | bc)
+    local remainingSeconds=$(echo "$remainingSeconds - ($hours * 3600)" | bc)
+    local minutes=$(echo "scale=0; $remainingSeconds / 60" | bc)
+    local seconds=$(echo "scale=3; $remainingSeconds - ($minutes * 60)" | bc)
+
+    printf "%02d.%02d:%02d:%06.3f\n" "$days" "$hours" "$minutes" "$seconds"
 }
