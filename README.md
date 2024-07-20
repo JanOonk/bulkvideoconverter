@@ -8,16 +8,15 @@ It daily converts all the MPEG2 recordings made by NextPVR with my HDHomeRun tun
 ## Dependencies
 Packages:  
 `ffmpeg` - used for the actual conversion  
-`ffprobe` - for getting stats like duration of videofile  
 `bc` - for math calculations  
-
-`jq` - for parsing the JSON videofile stats result of `ffprobe` - https://stedolan.github.io/jq/  
 
 ## Installation
 1. Easiest way to get the ffmpeg and ffprobe dependencies with hardware acceleration on your Synology NAS is by running a Jellyfin docker container from `https://hub.docker.com/r/jellyfin/jellyfin`
 2. `git clone https://github.com/JannemanDev/bulkvideoconverter.git` 
 3. `apt-get install bc`
-4. `convertVideos.sh`
+4. adapt `settings.sh`
+5. optionally implement a post run script (see `postRun-example.sh`)
+6. `convertVideos.sh`
 
 ## Different encoders
 
@@ -33,13 +32,12 @@ All settings can be set using a shellscript. By default `convertVideos.sh` will 
 
 ```shellscript
 # ---- BEGIN OF SETTINGS ----
+
 # full path to ffmpeg (here using Docker environment variable)
 ffmpeg=$JELLYFIN_FFMPEG
-# full path to ffprobe (here using Docker environment variable) by first taking the directory of JELLYFIN_FFMPEG
-ffprobe=${JELLYFIN_FFMPEG%/*}/ffprobe
 
 # if no searchFolder -sf argument is given when script is called these searchFolders will be used (enter/space seperated)
-defaultSearchFolders=(
+defaultSearchDirectories=(
 	"/videos/"
 )
 
@@ -67,11 +65,7 @@ defaultEncoder="hevc_vaapi"
 minFileAgeInSeconds=10
 
 # exclude folders, be sure to end with a / (space separated)
-defaultExcludedDirectories=( 
-	"/videos/test/"
-	"/videos/test2/"
-	"/videos/test3/"
-	"/videos/test4/"
+defaultExcludedDirectories=(
 )
 
 # ffmpeg quality of encoding
@@ -87,16 +81,16 @@ defaultQuality=25
 # verbose - Same as info, except more verbose.
 # debug   - Show everything, including debugging information.
 # trace
-loglevel=verbose
+loglevel=quiet
 
 # how many conversion retries (1 try per run)
-maxRetries=3
+maxRetries=2
 
 # after successfull conversion delete corresponding .xml file which HDHomeRun generates?
 removeVideoXMLFile=true
 
 # how much tolereance between inputfile and outputfile to be a match (means conversion is succesfull)
-maxDurationDifferenceAsPercentage=1
+maxDurationDifferenceAsPercentage=1.5
 redoConversionWhenInputAndOutputDontMatch=true
 
 # In some rare cases you can have an outputfile which has the same filename (without extension) as an inputfile,
@@ -111,7 +105,7 @@ keepPreviousConversion=true
 deleteOriginalFiles=true
 
 # is it allowed to have multiple instances running of this script (to be safe set to false), works only on the same host
-multipleInstancesAllowed=false
+multipleInstancesAllowed=true
 
 # if runOnce is set to false it will keep running (script is never exited) and 
 #  will restart scanning automatically at the next scheduled time (see rerunAt and rerunAtIsRelative settings)
@@ -127,6 +121,11 @@ maxRunTimePerRunInMinutes=-1
 
 # in this file all full filenames will be stored that has hit maximum number of retries and will therefor be skipped
 filenameInputFilesWithMaxRetries="inputFilesWithMaxRetries.txt"
+
+# call post run script
+postRunScript="./postRun.sh"
+stopWhenPostRunScriptFails=false
+
 # ---- END OF SETTINGS ----
 ```
 

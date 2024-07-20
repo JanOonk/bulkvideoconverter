@@ -2,8 +2,6 @@
 
 # full path to ffmpeg (here using Docker environment variable)
 ffmpeg=$JELLYFIN_FFMPEG
-# full path to ffprobe (here using Docker environment variable) by first taking the directory of JELLYFIN_FFMPEG
-ffprobe=${JELLYFIN_FFMPEG%/*}/ffprobe
 
 # if no searchFolder -sf argument is given when script is called these searchFolders will be used (enter/space seperated)
 defaultSearchDirectories=(

@@ -4,13 +4,14 @@
 #  apt-get update
 #  apt-get install bc
 #
-#  Also `jq` (supplied with this script) and `stat` (standard for most Linux distro's) are used.
+#  Also `stat` (standard for most Linux distro's) are used.
 #
 # Limitations
 # -It sometimes happens that an .mp4 conversion doesn't succeed (although .ts recording might seem visually ok). 
 #  Mostly because the .ts recording is (partially) corrupt which can cause the retrieved duration/length to be bogus,
 #   this happens to all: MediaInfo, ffprobe, Windows, VLC
 #  By implementing maxDurationDifferenceAsPercentage and maxRetries this is worked around and preventing endless retries.
+#  Also by using ffmpeg instead of ffprobe gives a more reliable and robust way to retrieve the duration/length of the video files
 #
 # Todo:
 # X trap ctrl-c (quit, terminate, kill) signals -> works if script is run directly but does not when called from other script (with piping?)
