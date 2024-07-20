@@ -215,7 +215,7 @@ do
                 log_message " Inputfile had previously reached $maxRetries max retries!"
                 log_message " Removing it from \"$filenameInputFilesWithMaxRetries\""
                 remove_string_at inputFilesWithMaxRetries $found_index
-                save_to_file inputFilesWithMaxRetries filenameInputFilesWithMaxRetries
+                save_to_file inputFilesWithMaxRetries $filenameInputFilesWithMaxRetries
                 nrOfRetriedFilesWithPreviouslyMaxRetries=$((nrOfRetriedFilesWithPreviouslyMaxRetries + 1))
             fi
         fi
