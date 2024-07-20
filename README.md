@@ -1,22 +1,57 @@
 # Bulk Video Converter
 A flexible and featured Bash shellscript that recursively scans folders for certain video files and convert/re-encode them to a different codec using ffmpeg.  
+It can run just once or every time at (or after) a certain time(period). For other features see `Script Settings`.
 
 ## Context
-I am using this script inside a Jellyfin Debian docker container running on my Synology DS720+ NAS (Intel Celeron J4125 4-core CPU + 6GB). 
-It daily converts all the MPEG2 recordings made by NextPVR with my HDHomeRun tuner to H.265 MP4 using vaapi hardware acceleration. 
+I am using this script inside a Jellyfin Debian docker container running on my Synology NAS.
+I tested it on my older DS720+ NAS (Intel Celeron J4125 4-core CPU + 6GB) and currently it's running on DS923+ (AMD Ryzen R1600 2-core CPU + 16GB).
+It daily converts all the MPEG2 recordings made by NextPVR with my HDHomeRun tuner to H.265 MP4 using vaapi hardware acceleration.
 
 ## Dependencies
 Packages:  
-`ffmpeg` - used for the actual conversion  
+`ffmpeg` - used for the actual video conversion  
 `bc` - for math calculations  
 
+```
+sudo apt update
+sudo apt install ffmpeg bc
+ffmpeg -version
+bc -version
+```
+
 ## Installation
-1. Easiest way to get the ffmpeg and ffprobe dependencies with hardware acceleration on your Synology NAS is by running a Jellyfin docker container from `https://hub.docker.com/r/jellyfin/jellyfin`
-2. `git clone https://github.com/JannemanDev/bulkvideoconverter.git` 
-3. `apt-get install bc`
-4. adapt `settings.sh`
-5. optionally implement a post run script (see `postRun-example.sh`)
-6. `convertVideos.sh`
+
+Easiest way to get the ffmpeg (and bc) dependencies and even have hardware acceleration on your Synology NAS (if supported) is by running a Jellyfin docker container from `https://hub.docker.com/r/jellyfin/jellyfin`.
+See next paragraph. Else you should install dependencies manually.
+
+1. `git clone https://github.com/JannemanDev/bulkvideoconverter.git` 
+2. install dependencies (see above)
+3. adapt `settings.sh`
+4. optionally implement a post run script (see `postRun-example.sh`)
+5. `convertVideos.sh`
+
+## How to use on Synology NAS
+
+If you want to run this on Synology and use Jellyfin (which includes ffmpeg and has hardware acceleration if your NAS supports it) follow these steps:
+1. Create an `Apps` Shared Folder first (see `Control Panel > Shared Folder`)
+2. Optional: Install `Git` (not `Git Server`!) package for easy repo cloning (or just download sources and unpack it)
+3. Optional: if you want to run directly on NAS and not using Jellyfin docker container you also need `SynoCli misc. Tools` (Community) package for `bc` dependency. Goto `Control Panel > Package Center` to install.
+4. SSH into your NAS (for example by using Putty) and then goto the created Shared Folder: `cd /volume1/Apps/`
+5. Follow the steps above from `Installation`
+
+To have the Jellyfin container autostart at NAS boot up and also auto start the bulkvideoconverter use:
+1. Under `Control Panel > Task Scheduler` create a `Triggered Task > User defined script`
+2. Use these General Settings: `User: root`, `Event: Boot-up`
+3. Use these Task Settings: `User-defined script: /volume1/Apps/bulkvideoconverter/startDockerContainer.sh`
+
+Create a Jellyfin docker container (using DSM 7)
+1. Start Container Manager
+2. Registry > Search edit box > jellyfin
+3. Download
+4. Container > Create > Image: jellyfin/jellyfin:latest
+5. Next
+6. Volume Settings > Add Folder: expand the Shared Folder from step 1 of `Installation` and search for the installation folder. Map this folder for this container to `/Apps`.
+7. Volume Settings > Add Folder: search your video folder. Map this folder for this container to `/videos`.
 
 ## Different encoders
 

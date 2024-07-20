@@ -121,7 +121,7 @@ function load_from_file() {
   if [ -f "$filename" ]; then
     readarray -t arr < "$filename"
   else
-    echo "File not found: $filename"
+    # echo "File not found: $filename"
     return 1
   fi
 }
