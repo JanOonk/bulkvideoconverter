@@ -491,22 +491,26 @@ do
 	filesFailedRun_string=$(IFS=','; echo "${filesFailedRun[*]}")
 	inputFilesWithMaxRetries_string=$(IFS=','; echo "${inputFilesWithMaxRetries[*]}")
 
-	# Call the script in a subshell and pass the array strings as arguments
-	( "$postRunScript" "$inputFilesConvertedRun_string" "$outputFilesConvertedRun_string" "$filesFailedRun_string" "$inputFilesWithMaxRetries_string" )
+    if [ -f "$postRunScript" ]; then
+        # Call the script in a subshell and pass the array strings as arguments
+        ( "$postRunScript" "$inputFilesConvertedRun_string" "$outputFilesConvertedRun_string" "$filesFailedRun_string" "$inputFilesWithMaxRetries_string" )
 
-	# Capture the exit code of the called script
-	exit_code=$?
+        # Capture the exit code of the called script
+        exit_code=$?
 
-	# Check the exit code
-	if [[ $exit_code -eq 0 ]]; then
-		log_message "postRun.sh script completed successfully!"
-	else
-		log_message "postRun.sh script returned a non-zero exit code: $exit_code"
-		if [[ $stopWhenPostRunScriptFails == true ]]; then
-			break;
-		fi
-	fi
-	
+        # Check the exit code
+        if [[ $exit_code -eq 0 ]]; then
+            log_message "postRun.sh script completed successfully!"
+        else
+            log_message "postRun.sh script returned a non-zero exit code: $exit_code"
+            if [[ $stopWhenPostRunScriptFails == true ]]; then
+                break;
+            fi
+        fi
+    else
+        log_message "No post run script will be called, since \"$postRunScript\" does not exist!"
+    fi
+    
 	log_message "Waiting for next round!"
 
 	if [ "$runOnce" = false ]; then
