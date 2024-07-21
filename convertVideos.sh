@@ -93,6 +93,8 @@ log_message ""
 log_message "---------------------------------------------------------------------------------------------------------"
 log_message "Run starts"
 log_message "Scriptname: $0"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+log_message "Located in: \"$script_dir\""
 log_message "PID: $$"
 log_message "Running on host: $(hostname)"
 if [ $# -eq 0 ]; then
