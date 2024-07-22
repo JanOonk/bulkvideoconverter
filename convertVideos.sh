@@ -55,6 +55,12 @@ fi
 
 includeSourceFile "$settingsFile"
 
+if [ ! -f "$ffmpeg" ]; then
+    echo "ffmpeg was not found at \"$ffmpeg\""
+    echo "check your ffmpeg settings in \"$settingsFile\""
+    exit 1
+fi
+
 logFile=$(get_non_empty_string "$logFile" "$defaultLogFile")
 
 quality=$(get_positive_value $quality $defaultQuality)
