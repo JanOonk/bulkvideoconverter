@@ -1,3 +1,4 @@
+settings.sh
 postRun.sh
 convertVideos-logfile.txt
 inputFilesWithMaxRetries.txt

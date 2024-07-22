@@ -26,8 +26,8 @@ See next paragraph. Else you should install dependencies manually.
 
 1. `git clone https://github.com/JannemanDev/bulkvideoconverter.git` 
 2. install dependencies (see above)
-3. adapt `settings.sh`
-4. optionally implement a post run script (see `postRun-example.sh`)
+3. copy `settings.default.sh` to `settings.sh` and adapt it
+4. optionally implement a post run script (see `postRun.example.sh`)
 5. `convertVideos.sh`
 
 ## How to use on Synology NAS
