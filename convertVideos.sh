@@ -122,9 +122,9 @@ codec=${parts[0]}
 hardware=""
 if [ "${#parts[@]}" -eq 2 ]; then
 	hardware="${parts[1]}"
-	log_message "Using codec $codec and hardware acceleration using $hardware"
+	log_message "Encoder $encoder was specified (codec: $codec and hardware acceleration: $hardware)"
 else  
-	log_message "Using codec $codec with no hardware acceleration"
+	log_message "Encoder $encoder was specified (codec: $codec and hardware acceleration: none)"
 fi
 
 totalConversionTimeRuns=0
