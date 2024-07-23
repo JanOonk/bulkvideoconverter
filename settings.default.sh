@@ -1,6 +1,6 @@
 # ---- BEGIN OF SETTINGS ----
 
-# full path to ffmpeg (here using Docker environment variable)
+# full path to ffmpeg (here using $JELLYFIN_FFMPEG Docker environment variable)
 ffmpeg=$JELLYFIN_FFMPEG
 
 # if no searchFolder -sf argument is given when script is called these searchFolders will be used (enter/space seperated)

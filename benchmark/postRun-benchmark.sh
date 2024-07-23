@@ -1,7 +1,5 @@
 #!/bin/bash
 
-source common-functions.sh
-
 # Convert the comma-separated strings arguments back to arrays
 IFS=',' read -ra outputFilesConvertedRun <<< "$2"
 

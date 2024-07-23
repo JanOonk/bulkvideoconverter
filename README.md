@@ -4,7 +4,10 @@ It can run just once or every time at (or after) a certain time(period). For oth
 
 ## Context
 I am using this script inside a Jellyfin Debian docker container running on my Synology NAS.
-I tested it on my older DS720+ NAS (Intel Celeron J4125 4-core CPU + 6GB) and currently it's running on DS923+ (AMD Ryzen R1600 2-core CPU + 16GB).
+I tested it both directly and inside Jellyfin container:
+-on my older DS720+ NAS (Intel Celeron J4125 4-core CPU + 6GB) which support hardware acceleration using vaapi or qsv.
+-on my newer DS923+ (AMD Ryzen R1600 2-core CPU + 16GB) which sadly didn't have hardware acceleration.
+
 It daily converts all the MPEG2 recordings made by NextPVR with my HDHomeRun tuner to H.265 MP4 using vaapi hardware acceleration.
 
 ## Dependencies
@@ -21,7 +24,7 @@ bc -version
 
 ## Installation
 
-Easiest way to get the ffmpeg (and bc) dependencies and even have hardware acceleration on your Synology NAS (if supported) is by running a Jellyfin docker container from `https://hub.docker.com/r/jellyfin/jellyfin`.
+Easiest way to get the ffmpeg dependencies and even have hardware acceleration on your Synology NAS (if supported) is by running a Jellyfin docker container from `https://hub.docker.com/r/jellyfin/jellyfin`.
 See next paragraph. Else you should install dependencies manually.
 
 1. `git clone https://github.com/JannemanDev/bulkvideoconverter.git` 
@@ -45,13 +48,14 @@ To have the Jellyfin container autostart at NAS boot up and also auto start the 
 3. Use these Task Settings: `User-defined script: /volume1/Apps/bulkvideoconverter/startDockerContainer.sh`
 
 Create a Jellyfin docker container (using DSM 7)
-1. Start Container Manager
-2. Registry > Search edit box > jellyfin
-3. Download
-4. Container > Create > Image: jellyfin/jellyfin:latest
-5. Next
-6. Volume Settings > Add Folder: expand the Shared Folder from step 1 of `Installation` and search for the installation folder. Map this folder for this container to `/Apps`.
-7. Volume Settings > Add Folder: search your video folder. Map this folder for this container to `/videos`.
+1. Install `Container Manager` from `Package Center`
+2. Start `Container Manager`
+3. Registry > Search edit box > jellyfin
+4. Download
+5. Container > Create > Image: jellyfin/jellyfin:latest
+6. Next
+7. Volume Settings > Add Folder: expand the Shared Folder from step 1 of `Installation` and search for the installation folder. Map this folder for this container to `/Apps`.
+8. Volume Settings > Add Folder: search your video folder. Map this folder for this container to `/videos`.
 
 ## Different encoders
 
@@ -170,7 +174,7 @@ All settings are loaded by default from `settings.sh` but overridable by setting
 Also some settings from the settings file can also be set and overriden by using parameters when `convertVideos.sh` is called.
 
 <pre>
-Convert videos v1.0 - 15 May 2023
+Convert videos v1.1 - 23 July 2024
 Syntax is:
  convertVideos.sh [option(s)]
   where option is:
