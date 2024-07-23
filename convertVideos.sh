@@ -366,8 +366,8 @@ do
                     exit_code=$?
 
                     # Check the exit code
-                    if [ $? -ne 0 ]; then
-                        log_message "Executing ffmpeg failed with error code: $?"
+                    if [ $exit_code -ne 0 ]; then
+                        log_message "Ffmpeg returned a non-zero exit code: $?"
                     fi
 
                     conversionOk=false;
@@ -533,11 +533,11 @@ do
         exit_code=$?
 
         # Check the exit code
-        if [[ $exit_code -eq 0 ]]; then
+        if [ $exit_code -eq 0 ]; then
             log_message "postRun.sh script completed successfully!"
         else
             log_message "postRun.sh script returned a non-zero exit code: $exit_code"
-            if [[ $stopWhenPostRunScriptFails == true ]]; then
+            if [ $stopWhenPostRunScriptFails == true ]; then
                 break;
             fi
         fi
