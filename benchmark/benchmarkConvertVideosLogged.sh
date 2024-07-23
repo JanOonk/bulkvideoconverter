@@ -55,11 +55,12 @@ sed -i "s|^postRunScript=.*|postRunScript=$postRunFile|" "$settingsFile"
 echo "[$(date)] : start of $0"
 
 cd "$bulkConvertVideosFolder"
-./convertVideos.sh -sf "$settingsFile" -sd "$videosFolder" -ff "$videoFilenames" -e $ENCODER -lf "$logfile"
 
 # Define the output file path
 outputFile="outputFilesConvertedRun.txt"
 rm -f $outputFile
+
+./convertVideos.sh -sf "$settingsFile" -sd "$videosFolder" -ff "$videoFilenames" -e $ENCODER -lf "$logfile"
 
 # Check if the file exists
 if [ ! -f "$outputFile" ]; then
