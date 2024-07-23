@@ -367,7 +367,7 @@ do
 
                     # Check the exit code
                     if [ $exit_code -ne 0 ]; then
-                        log_message "Ffmpeg returned a non-zero exit code: $?"
+                        log_message "Ffmpeg returned a non-zero exit code: $exit_code"
                     fi
 
                     conversionOk=false;
