@@ -363,9 +363,9 @@ do
                         eval "$ffmpegCommand"
                     fi
                     
-                    conversionOk=false;
                     exit_code=$?
 
+                    conversionOk=false;
                     # Check the exit code
                     if [ $exit_code -ne 0 ]; then
                         log_message "Ffmpeg returned a non-zero exit code: $exit_code"
