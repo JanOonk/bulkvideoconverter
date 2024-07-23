@@ -61,6 +61,11 @@ if [ ! -f "$ffmpeg" ]; then
     exit 1
 fi
 
+if ! check_encoder_supported "$ffmpeg" "$encoder"; then
+    echo "Encoder '$encoder' is not supported by ffmpeg located at \"$ffmpeg\"."
+    exit 1
+fi
+
 logFile=$(get_non_empty_string "$logFile" "$defaultLogFile")
 
 quality=$(get_positive_value $quality $defaultQuality)
