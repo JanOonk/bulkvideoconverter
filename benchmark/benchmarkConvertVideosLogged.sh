@@ -59,6 +59,7 @@ cd "$bulkConvertVideosFolder"
 
 # Define the output file path
 outputFile="outputFilesConvertedRun.txt"
+rm -f $outputFile
 
 # Check if the file exists
 if [ ! -f "$outputFile" ]; then
