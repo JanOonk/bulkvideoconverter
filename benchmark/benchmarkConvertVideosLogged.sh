@@ -63,7 +63,7 @@ rm -f $outputFile
 
 # Check if the file exists
 if [ ! -f "$outputFile" ]; then
-    echo "File '$outputFile' does not exist."
+    echo "No files has been converted, file \"$outputFile\" does not exist!"
 else
     # Read the file contents into the array
     mapfile -t outputFilesConvertedRun < "$outputFile"
