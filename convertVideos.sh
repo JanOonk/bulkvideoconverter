@@ -363,71 +363,71 @@ do
                         eval "$ffmpegCommand"
                     fi
                     
+                    conversionOk=false;
                     exit_code=$?
 
                     # Check the exit code
                     if [ $exit_code -ne 0 ]; then
                         log_message "Ffmpeg returned a non-zero exit code: $exit_code"
-                    fi
+                    else
+                        if [ -f "$outputFile" ]; then
+                            timeAfterConversion=$(date +%s)
+                            conversionTime=$((timeAfterConversion - timeBeforeConversion))
 
-                    conversionOk=false;
-                    if [ -f "$outputFile" ]; then
-                        timeAfterConversion=$(date +%s)
-                        conversionTime=$((timeAfterConversion - timeBeforeConversion))
-
-                        filesizeOutput=$(stat -c%s "$outputFile")
-                        percentage=$(bc <<<"scale=4; $filesizeOutput / $filesizeInput * 100")
-                        log_message "  Percentage compression after conversion: $percentage%"
-                        
-                        speedFactor=$(bc <<<"scale=4; $durationInputFile / $conversionTime")
-                        formattedSpeedFactor=$(printf "%.2fx" $speedFactor)
-                        timeString=$(convertSecondsToTimeString "$conversionTime")
-                        log_message "  Time it took to convert $durationInputFile seconds of videofile: $conversionTime seconds ($timeString) ($formattedSpeedFactor)"
-
-                        log_inlinemessage "  Duration is (this can take a while): "
-                        durationOutputFile=$(determineDurationVideoInSeconds "$outputFile" "$ffmpeg")
-                        timeString=$(convertSecondsToTimeString "$durationOutputFile")
-                        log_message_without_timestamp "$durationOutputFile seconds ($timeString)"
-                        difference=$(abs_diff $durationInputFile $durationOutputFile)
-                        timeString=$(convertSecondsToTimeString "$difference")
-                        log_message "  Difference is $difference seconds ($timeString)"
-        
-                        durationDifferenceAsPercentage=$(bc <<<"scale=4; $difference / $durationInputFile * 100")
-                        log_message "  DifferenceAsPercentage is $durationDifferenceAsPercentage%"
-                        
-                        if [ $(bc <<<"$durationDifferenceAsPercentage < $maxDurationDifferenceAsPercentage") -eq 1 ]; then
-                            conversionOk=true;
-                            log_message " Conversion succesfull, inputFile can be deleted"
-
-                            totalConversionTimeRun=$((totalConversionTimeRun + conversionTime))
-
-                            #delete from inputFilesWithMaxRetries in case it previously had max retries
-                            remove_string inputFilesWithMaxRetries $inputFile
-                            inputFilesConvertedRun+=("$inputFile")
-                            outputFilesConvertedRun+=("$outputFile")
+                            filesizeOutput=$(stat -c%s "$outputFile")
+                            percentage=$(bc <<<"scale=4; $filesizeOutput / $filesizeInput * 100")
+                            log_message "  Percentage compression after conversion: $percentage%"
                             
-                            totalSucceedsRun=$((totalSucceedsRun + 1))
-                            totalDurationOfSuccessfullConvertedInputFilesRun=$(bc <<<"scale=4; $totalDurationOfSuccessfullConvertedInputFilesRun + $durationInputFile")
+                            speedFactor=$(bc <<<"scale=4; $durationInputFile / $conversionTime")
+                            formattedSpeedFactor=$(printf "%.2fx" $speedFactor)
+                            timeString=$(convertSecondsToTimeString "$conversionTime")
+                            log_message "  Time it took to convert $durationInputFile seconds of videofile: $conversionTime seconds ($timeString) ($formattedSpeedFactor)"
 
-                            if [ "$deleteOriginalFiles" = true ]; then
-                                delete_inputFile_and_outputFileVersions
-                            else
-                                log_message " Skipped deletion of \"$inputFile\" and (if any) previous converted version(s)"
-                            fi
+                            log_inlinemessage "  Duration is (this can take a while): "
+                            durationOutputFile=$(determineDurationVideoInSeconds "$outputFile" "$ffmpeg")
+                            timeString=$(convertSecondsToTimeString "$durationOutputFile")
+                            log_message_without_timestamp "$durationOutputFile seconds ($timeString)"
+                            difference=$(abs_diff $durationInputFile $durationOutputFile)
+                            timeString=$(convertSecondsToTimeString "$difference")
+                            log_message "  Difference is $difference seconds ($timeString)"
+            
+                            durationDifferenceAsPercentage=$(bc <<<"scale=4; $difference / $durationInputFile * 100")
+                            log_message "  DifferenceAsPercentage is $durationDifferenceAsPercentage%"
                             
-                            if [ "$removeVideoXMLFile" = true ]; then
-                                xmlFile="${inputFile%.*}.xml"
-                                if [ -e "$xmlFile" ]
-                                then
-                                    rm "$xmlFile"
-                                    log_message "Deleted \"$xmlFile\""
+                            if [ $(bc <<<"$durationDifferenceAsPercentage < $maxDurationDifferenceAsPercentage") -eq 1 ]; then
+                                conversionOk=true;
+                                log_message " Conversion succesfull, inputFile can be deleted"
+
+                                totalConversionTimeRun=$((totalConversionTimeRun + conversionTime))
+
+                                #delete from inputFilesWithMaxRetries in case it previously had max retries
+                                remove_string inputFilesWithMaxRetries $inputFile
+                                inputFilesConvertedRun+=("$inputFile")
+                                outputFilesConvertedRun+=("$outputFile")
+                                
+                                totalSucceedsRun=$((totalSucceedsRun + 1))
+                                totalDurationOfSuccessfullConvertedInputFilesRun=$(bc <<<"scale=4; $totalDurationOfSuccessfullConvertedInputFilesRun + $durationInputFile")
+
+                                if [ "$deleteOriginalFiles" = true ]; then
+                                    delete_inputFile_and_outputFileVersions
+                                else
+                                    log_message " Skipped deletion of \"$inputFile\" and (if any) previous converted version(s)"
                                 fi
+                                
+                                if [ "$removeVideoXMLFile" = true ]; then
+                                    xmlFile="${inputFile%.*}.xml"
+                                    if [ -e "$xmlFile" ]
+                                    then
+                                        rm "$xmlFile"
+                                        log_message "Deleted \"$xmlFile\""
+                                    fi
+                                fi
+                            else
+                                log_message " Conversion failed because the durationDifferenceAsPercentage >= $maxDurationDifferenceAsPercentage%"
                             fi
-                        else
-                            log_message " Conversion failed because the durationDifferenceAsPercentage >= $maxDurationDifferenceAsPercentage%"
+                        else 
+                            log_message " Conversion failed, outputfile \"$outputFile\" was NOT created after conversion!"
                         fi
-                    else 
-                        log_message " Conversion failed, outputfile \"$outputFile\" was NOT created after conversion!"
                     fi
                     
                     if [ "$conversionOk" = false ]; then 
