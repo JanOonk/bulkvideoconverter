@@ -348,7 +348,7 @@ do
                         echo "Executing command: $ffmpegCommand"
 
                         # Execute the command
-                        eval "$ffmpegCommand"                        
+                        eval "$ffmpegCommand"
                     else
                         #else simple cmdline when non-vaapi
                         # $ffmpeg -analyzeduration 10000000 -probesize 10000000 -i "$inputFile" -y -c:v $encoder -crf $qualityLevel_software -global_quality $qualityLevel_qsv -acodec mp3 "$outputFile" -loglevel $loglevel -v $loglevel -stats
@@ -363,6 +363,13 @@ do
                         eval "$ffmpegCommand"
                     fi
                     
+                    exit_code=$?
+
+                    # Check the exit code
+                    if [ $? -ne 0 ]; then
+                        log_message "Executing ffmpeg failed with error code: $?"
+                    fi
+
                     conversionOk=false;
                     if [ -f "$outputFile" ]; then
                         timeAfterConversion=$(date +%s)
