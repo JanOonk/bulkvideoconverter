@@ -283,3 +283,24 @@ convertSecondsToTimeString() {
 
     printf "%02d.%02d:%02d:%06.3f\n" "$days" "$hours" "$minutes" "$seconds"
 }
+
+# Function to check if an encoder is exactly supported (case-insensitive)
+check_encoder_supported() {
+    local ffmpeg="$1"
+    local encoder="$2"
+    
+    # Convert the encoder name to lowercase for consistent comparison
+    local lower_encoder=$(echo "$encoder" | tr '[:upper:]' '[:lower:]')
+    
+    # Get the list of encoders and clean up the output, convert to lowercase for comparison
+    encoders_list=$($ffmpeg -encoders | awk '{print $2}' | grep -v '^\[' | tr '[:upper:]' '[:lower:]')
+    
+    # Check if the exact encoder is in the list
+    if echo "$encoders_list" | grep -Fxq "$lower_encoder"; then
+        echo "Encoder '$encoder' is supported."
+        return 0
+    else
+        echo "Encoder '$encoder' is not supported."
+        return 1
+    fi
+}
