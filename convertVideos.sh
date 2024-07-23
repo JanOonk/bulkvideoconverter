@@ -539,9 +539,9 @@ do
 
         # Check the exit code
         if [ $exit_code -eq 0 ]; then
-            log_message "postRun.sh script completed successfully!"
+            log_message "Post run script \"$postRunScript\" completed successfully!"
         else
-            log_message "postRun.sh script returned a non-zero exit code: $exit_code"
+            log_message "Post run script \"$postRunScript\" returned a non-zero exit code: $exit_code"
             if [ $stopWhenPostRunScriptFails == true ]; then
                 break;
             fi
