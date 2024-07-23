@@ -297,10 +297,10 @@ check_encoder_supported() {
     
     # Check if the exact encoder is in the list
     if echo "$encoders_list" | grep -Fxq "$lower_encoder"; then
-        echo "Encoder '$encoder' is supported."
+        # echo "Encoder '$encoder' is supported."
         return 0
     else
-        echo "Encoder '$encoder' is not supported."
+        # echo "Encoder '$encoder' is not supported."
         return 1
     fi
 }
