@@ -348,26 +348,20 @@ do
                         
                         # Construct the ffmpeg command
                         ffmpegCommand="$ffmpeg -analyzeduration 10000000 -probesize 10000000 -i \"$inputFile\" -y -vf 'format=nv12,hwupload' -c:v $encoder -qp $qualityLevel_vaapi -acodec mp3 \"$outputFile\" -loglevel $loglevel -v $loglevel -stats -init_hw_device vaapi=va:/dev/dri/renderD128"
-
-                        # Print the command to be executed
-                        echo "Executing command: $ffmpegCommand"
-
-                        # Execute the command
-                        eval "$ffmpegCommand"
                     else
                         #else simple cmdline when non-vaapi
                         # $ffmpeg -analyzeduration 10000000 -probesize 10000000 -i "$inputFile" -y -c:v $encoder -crf $qualityLevel_software -global_quality $qualityLevel_qsv -acodec mp3 "$outputFile" -loglevel $loglevel -v $loglevel -stats
 
                         # Construct the ffmpeg command
                         ffmpegCommand="$ffmpeg -analyzeduration 10000000 -probesize 10000000 -i \"$inputFile\" -y -c:v $encoder -crf $qualityLevel_software -global_quality $qualityLevel_qsv -acodec mp3 \"$outputFile\" -loglevel $loglevel -v $loglevel -stats"
-
-                        # Print the command to be executed
-                        echo "Executing command: $ffmpegCommand"
-
-                        # Execute the command
-                        eval "$ffmpegCommand"
                     fi
                     
+                    # Print the command to be executed
+                    echo "Executing command:"
+                    echo " \"$ffmpegCommand\""
+
+                    # Execute the command
+                    eval "$ffmpegCommand"
                     exit_code=$?
 
                     conversionOk=false;
