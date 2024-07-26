@@ -57,6 +57,14 @@ Create a Jellyfin docker container (using DSM 7)
 7. Volume Settings > Add Folder: expand the Shared Folder from step 1 of `Installation` and search for the installation folder. Map this folder for this container to `/Apps`.
 8. Volume Settings > Add Folder: search your video folder. Map this folder for this container to `/videos`.
 
+## Benchmarking different encoders
+
+If you want to easily benchmark the converting of videos with different encoders goto `/benchmark` folder:
+1. adjust settings in `settings-benchmarks.sh`
+2. adjust the `benchmark settings` section in `benchmarkConvertVideosLogged.sh` 
+3. run one of the `runBenchmark*.sh` predefined scripts or adapt it to use different encoders (see supported encoders by running `ffmpeg -encoders`)
+4. converted videos will be saved in the same folder as the source videofile(s) and the time it took to convert (and other details) can be found in `benchmark.txt`
+
 ## Different encoders
 
 Supported ffmpeg encoders can be checked with:  

@@ -17,10 +17,10 @@ bulkConvertVideosFolder="/Apps/bulkvideoconverter"
 
 # points to the settings file which is used for this benchmark
 settingsFile="$script_dir/settings-benchmark.sh"
-postRunFile="$script_dir/postRun-benchmark.sh"
 
 # -----------------------------------------
 
+postRunFile="$script_dir/postRun-benchmark.sh"
 logfile="$videosFolder/benchmark.txt"
 
 echo "Folder of running script: $script_dir"
